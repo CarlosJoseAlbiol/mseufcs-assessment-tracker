@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trainee Dashboard — MSEUF Concert Singers</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --parchment:#FAF6EC;
+    --parchment-deep:#F1E9D8;
+    --maroon-deep:#210306;
+    --maroon:#4A0810;
+    --crimson:#6B0F1F;
+    --crimson-bright:#93172A;
+    --gold:#D4A017;
+    --gold-light:#F2D479;
+    --ink:#2B211A;
+    --ink-soft:#5c4f42;
+    --success:#3C7A5C;
+    --success-bg:#E7F0EA;
+    --danger:#A23B2E;
+    --danger-bg:#FBEAE7;
+    --radius:14px;
+    --shadow: 0 18px 40px -18px rgba(43,33,26,0.35);
+  }
+  *{box-sizing:border-box;}
+  html,body{ margin:0; }
+  body{
+    min-height:100vh;
+    background:
+      radial-gradient(circle at 10% 0%, rgba(201,162,39,0.08), transparent 40%),
+      var(--parchment);
+    font-family:'Inter',sans-serif;
+    color:var(--ink);
+  }
+  header{
+    background:
+      radial-gradient(circle at 15% -20%, rgba(242,212,121,0.14), transparent 55%),
+      linear-gradient(135deg,var(--maroon) 0%,var(--crimson) 55%,var(--crimson-bright) 100%);
+    color:#fff;
+    padding:16px 24px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:16px;
+    position:sticky; top:0; z-index:10;
+    box-shadow:var(--shadow);
+  }
+  header .brand{ display:flex; align-items:center; gap:12px; }
+  header .seal{
+    width:42px;height:42px;border-radius:50%;
+    border:2px solid var(--gold-light);
+    overflow:hidden;
+    flex-shrink:0;
+    box-shadow:0 2px 10px rgba(0,0,0,0.35);
+  }
+  header .seal img{ width:100%; height:100%; object-fit:cover; display:block; }
+  header h1{ margin:0; font-family:'Fraunces',serif; font-weight:600; font-size:18px; }
+  header p{ margin:0; font-size:12px; color:rgba(255,255,255,0.78); }
+  header .who{ text-align:right; }
+  header .who .name{ font-weight:600; font-size:13px; }
+  header .who button{
+    margin-top:4px;
+    background:rgba(255,255,255,0.14);
+    border:1px solid rgba(255,255,255,0.35);
+    color:#fff;
+    font-size:11px;
+    padding:5px 10px;
+    border-radius:999px;
+    cursor:pointer;
+  }
+  header .who button:hover{ background:rgba(255,255,255,0.24); }
+
+  main{ position:relative; z-index:1; max-width:900px; margin:0 auto; padding:24px 20px 80px; }
+
+  .notes-field{ position:fixed; inset:0; overflow:hidden; pointer-events:none; z-index:0; }
+  .note{
+    position:absolute; top:-40px;
+    color:var(--gold);
+    opacity:0.16;
+    font-family:'Fraunces',serif;
+    user-select:none;
+    animation-name: note-fall;
+    animation-timing-function:linear;
+    animation-fill-mode:forwards;
+  }
+  @keyframes note-fall{
+    0%{ transform:translateY(0) translateX(0) rotate(0deg); opacity:0; }
+    8%{ opacity:0.22; }
+    92%{ opacity:0.16; }
+    100%{ transform:translateY(112vh) translateX(var(--drift,20px)) rotate(var(--spin,180deg)); opacity:0; }
+  }
+
+  .stats{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:12px;
+    margin-bottom:28px;
+  }
+  .stat{
+    background:#fff;
+    border:1px solid var(--parchment-deep);
+    border-radius:12px;
+    padding:14px 16px;
+    text-align:center;
+  }
+  .stat .num{ font-family:'Fraunces',serif; font-size:26px; font-weight:600; }
+  .stat .lbl{ font-size:11px; text-transform:uppercase; letter-spacing:0.4px; color:var(--ink-soft); margin-top:2px;}
+  .stat.mastered .num{ color:var(--success); }
+  .stat.notyet .num{ color:var(--danger); }
+  .stat.pending .num{ color:var(--gold); }
+
+  .section-title{
+    font-family:'Fraunces',serif;
+    font-size:15px;
+    font-weight:600;
+    color:var(--ink-soft);
+    text-transform:uppercase;
+    letter-spacing:0.6px;
+    margin:0 0 12px;
+  }
+
+  .assessment{
+    background:#fff;
+    border:1px solid var(--parchment-deep);
+    border-radius:var(--radius);
+    margin-bottom:18px;
+    overflow:hidden;
+  }
+  .assessment__head{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    gap:10px;
+    padding:16px 20px;
+    background:var(--parchment-deep);
+  }
+  .assessment__head h2{
+    margin:0;
+    font-family:'Fraunces',serif;
+    font-size:16px;
+    font-weight:600;
+  }
+  .assessment__date{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    color:var(--crimson);
+    font-weight:500;
+  }
+  .assessment__notes{
+    padding:0 20px;
+    font-size:12.5px;
+    color:var(--ink-soft);
+    font-style:italic;
+  }
+  .songlist{ padding:8px 12px 14px; }
+  .song-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:14px;
+    padding:11px 10px;
+    border-bottom:1px solid var(--parchment-deep);
+  }
+  .song-row:last-child{ border-bottom:none; }
+  .song-info{ min-width:0; }
+  .song-title{ font-weight:600; font-size:14px; }
+  .song-meta{ font-size:12px; color:var(--ink-soft); margin-top:1px; }
+  .cat-badge{
+    display:inline-block;
+    font-size:9.5px;
+    font-weight:700;
+    letter-spacing:0.4px;
+    text-transform:uppercase;
+    padding:2px 7px;
+    border-radius:999px;
+    margin-right:6px;
+    vertical-align:middle;
+  }
+  .cat-Easy{ background:#E7F0EA; color:var(--success); }
+  .cat-Medium{ background:#FBF1DA; color:#8A6A11; }
+  .cat-Hard{ background:#FBEAE7; color:var(--danger); }
+  .cat-Intermediate{ background:#E9E4F5; color:#5A3FA0; }
+
+  .stamp-controls{ display:flex; align-items:center; gap:6px; flex-shrink:0; }
+  .stamp-btn{
+    width:36px; height:36px;
+    border-radius:50%;
+    border:1.5px solid var(--parchment-deep);
+    background:#fff;
+    cursor:pointer;
+    font-size:16px;
+    display:flex; align-items:center; justify-content:center;
+    transition:transform .12s ease, border-color .15s ease, background .15s ease;
+    color:var(--ink-soft);
+  }
+  .stamp-btn:hover{ transform:scale(1.08); }
+  .stamp-btn:active{ transform:scale(0.94); }
+  .stamp-btn.check.active{ background:var(--success); border-color:var(--success); color:#fff; }
+  .stamp-btn.cross.active{ background:var(--danger); border-color:var(--danger); color:#fff; }
+
+  .stamp-tag{
+    font-family:'Fraunces',serif;
+    font-weight:700;
+    font-size:10.5px;
+    letter-spacing:0.8px;
+    text-transform:uppercase;
+    padding:4px 9px;
+    border-radius:6px;
+    border:1.5px solid transparent;
+    transform:rotate(-4deg);
+    white-space:nowrap;
+  }
+  .stamp-tag.mastered{ color:var(--success); border-color:var(--success); background:var(--success-bg); }
+  .stamp-tag.notyet{ color:var(--danger); border-color:var(--danger); background:var(--danger-bg); transform:rotate(3deg); }
+  .stamp-tag.pending{ color:var(--ink-soft); border-color:var(--parchment-deep); background:var(--parchment); transform:rotate(0deg); }
+
+  .empty{
+    text-align:center;
+    padding:60px 20px;
+    color:var(--ink-soft);
+  }
+  .empty .seal-lg{
+    width:64px;height:64px;border-radius:50%;
+    border:2px dashed var(--gold);
+    display:flex;align-items:center;justify-content:center;
+    margin:0 auto 14px;
+    font-family:'Fraunces',serif; font-size:24px; color:var(--gold);
+  }
+
+  .loading{ text-align:center; padding:60px 0; color:var(--ink-soft); font-size:13px; }
+
+  :focus-visible{ outline:2px solid var(--gold); outline-offset:2px; }
+  @media (max-width:560px){
+    .stats{ grid-template-columns:repeat(2,1fr); }
+    header{ padding:16px; }
+    header h1{ font-size:16px; }
+    .song-row{ flex-wrap:wrap; }
+  }
+  @media (prefers-reduced-motion: reduce){ *{transition:none !important;} }
+</style>
+</head>
+<body>
+
+<div class="notes-field" id="notes-field" aria-hidden="true"></div>
+
+<header>
+  <div class="brand">
+    <div class="seal"><img src="img/logo.jpg" alt="MSEUF Concert Singers"></div>
+    <div>
+      <h1>MSEUF Concert Singers</h1>
+      <p>Trainee Assessment Checklist</p>
+    </div>
+  </div>
+  <div class="who">
+    <div class="name" id="who-name">—</div>
+    <button id="signout-btn">Sign Out</button>
+  </div>
+</header>
+
+<main>
+  <div class="stats">
+    <div class="stat"><div class="num" id="stat-total">0</div><div class="lbl">Assigned</div></div>
+    <div class="stat mastered"><div class="num" id="stat-mastered">0</div><div class="lbl">Mastered</div></div>
+    <div class="stat notyet"><div class="num" id="stat-notyet">0</div><div class="lbl">Not Yet</div></div>
+    <div class="stat pending"><div class="num" id="stat-pending">0</div><div class="lbl">Unmarked</div></div>
+  </div>
+
+  <h2 class="section-title">Your Assessment Schedule</h2>
+  <div id="assessment-list" class="loading">Loading your schedule…</div>
+</main>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+import {
+  getFirestore, doc, getDoc, setDoc, collection, getDocs, query, orderBy,
+  onSnapshot, serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+import { firebaseConfig } from "./js/firebase-config.js";
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+let currentUser = null;
+let songsById = {};        // songId -> song data
+let assessments = [];      // all assessment docs, sorted by date
+let progressByKey = {};    // `${assessmentId}_${songId}` -> "mastered" | "not_mastered"
+
+const listEl = document.getElementById("assessment-list");
+
+// ---- Auth gate: trainees only. MIs get bounced to their own dashboard. ----
+onAuthStateChanged(auth, async (user) => {
+  if (!user){ window.location.href = "index.html"; return; }
+  const profSnap = await getDoc(doc(db, "users", user.uid));
+  const profile = profSnap.exists() ? profSnap.data() : null;
+  if (!profile){ window.location.href = "index.html"; return; }
+  if (profile.role === "mi"){ window.location.href = "mi.html"; return; }
+
+  currentUser = user;
+  document.getElementById("who-name").textContent = profile.name || user.email;
+  await loadSongs();
+  listenAssessments();
+  listenProgress();
+});
+
+document.getElementById("signout-btn").addEventListener("click", () => signOut(auth));
+
+async function loadSongs(){
+  const snap = await getDocs(collection(db, "songs"));
+  songsById = {};
+  snap.forEach(d => songsById[d.id] = d.data());
+}
+
+function listenAssessments(){
+  const q = query(collection(db, "assessments"), orderBy("date", "asc"));
+  onSnapshot(q, (snap) => {
+    assessments = [];
+    snap.forEach(d => assessments.push({ id: d.id, ...d.data() }));
+    render();
+  });
+}
+
+function listenProgress(){
+  // Trainees can only ever read their own progress docs (enforced by
+  // Firestore rules too) — we scope the query client-side via doc IDs
+  // that always start with this uid.
+  const q = collection(db, "progress");
+  onSnapshot(q, (snap) => {
+    progressByKey = {};
+    snap.forEach(d => {
+      const data = d.data();
+      if (data.uid === currentUser.uid){
+        progressByKey[`${data.assessmentId}_${data.songId}`] = data.status;
+      }
+    });
+    render();
+  });
+}
+
+async function setStatus(assessmentId, songId, status){
+  const key = `${assessmentId}_${songId}`;
+  const current = progressByKey[key];
+  const next = current === status ? "pending" : status; // tap again to clear
+  const docId = `${currentUser.uid}_${assessmentId}_${songId}`;
+  await setDoc(doc(db, "progress", docId), {
+    uid: currentUser.uid,
+    assessmentId, songId,
+    status: next,
+    updatedAt: serverTimestamp()
+  });
+}
+
+function fmtDate(iso){
+  if (!iso) return "No date set";
+  const d = new Date(iso + "T00:00:00");
+  if (isNaN(d)) return iso;
+  return d.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" });
+}
+
+function render(){
+  if (!assessments.length){
+    listEl.className = "";
+    listEl.innerHTML = `
+      <div class="empty">
+        <div class="seal-lg">MI</div>
+        <p>No assessments have been scheduled yet.<br>Check back once your Master of Initiation posts the calendar.</p>
+      </div>`;
+    updateStats(0,0,0,0);
+    return;
+  }
+
+  let total = 0, mastered = 0, notyet = 0, pending = 0;
+  listEl.className = "";
+  listEl.innerHTML = assessments.map(a => {
+    const songIds = a.songIds || [];
+    const rows = songIds.map(sid => {
+      const song = songsById[sid];
+      if (!song) return "";
+      total++;
+      const key = `${a.id}_${sid}`;
+      const status = progressByKey[key] || "pending";
+      if (status === "mastered") mastered++;
+      else if (status === "not_mastered") notyet++;
+      else pending++;
+
+      const tag = status === "mastered"
+        ? `<span class="stamp-tag mastered">✓ Mastered</span>`
+        : status === "not_mastered"
+          ? `<span class="stamp-tag notyet">✕ Not Yet</span>`
+          : `<span class="stamp-tag pending">Unmarked</span>`;
+
+      return `
+        <div class="song-row">
+          <div class="song-info">
+            <div class="song-title">${escapeHtml(song.title)}</div>
+            <div class="song-meta">
+              <span class="cat-badge cat-${song.category}">${song.category}</span>
+              ${song.composer ? escapeHtml(song.composer) : ""}
+            </div>
+          </div>
+          <div class="stamp-controls">
+            ${tag}
+            <button class="stamp-btn check ${status === "mastered" ? "active" : ""}" title="Mark mastered" data-a="${a.id}" data-s="${sid}" data-status="mastered">✓</button>
+            <button class="stamp-btn cross ${status === "not_mastered" ? "active" : ""}" title="Mark not yet mastered" data-a="${a.id}" data-s="${sid}" data-status="not_mastered">✕</button>
+          </div>
+        </div>`;
+    }).join("");
+
+    return `
+      <div class="assessment">
+        <div class="assessment__head">
+          <h2>${escapeHtml(a.title || "Assessment")}</h2>
+          <div class="assessment__date">${fmtDate(a.date)}</div>
+        </div>
+        ${a.notes ? `<div class="assessment__notes">${escapeHtml(a.notes)}</div>` : ""}
+        <div class="songlist">${rows || '<div class="song-row"><div class="song-meta">No songs assigned to this assessment yet.</div></div>'}</div>
+      </div>`;
+  }).join("");
+
+  updateStats(total, mastered, notyet, pending);
+
+  document.querySelectorAll(".stamp-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      setStatus(btn.dataset.a, btn.dataset.s, btn.dataset.status);
+    });
+  });
+}
+
+function updateStats(total, mastered, notyet, pending){
+  document.getElementById("stat-total").textContent = total;
+  document.getElementById("stat-mastered").textContent = mastered;
+  document.getElementById("stat-notyet").textContent = notyet;
+  document.getElementById("stat-pending").textContent = pending;
+}
+
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, m => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m]));
+}
+</script>
+
+<script>
+// Gentle falling musical notes in the background — purely decorative,
+// pointer-events are disabled on the container so it never blocks clicks.
+(function(){
+  const field = document.getElementById("notes-field");
+  if (!field) return;
+  const symbols = ["♪","♫","♩","♬","♭"];
+  function spawn(){
+    const n = document.createElement("span");
+    n.className = "note";
+    n.textContent = symbols[Math.floor(Math.random() * symbols.length)];
+    const size = 14 + Math.random() * 20;
+    const duration = 11 + Math.random() * 9;
+    const drift = (Math.random() * 90 - 45) + "px";
+    const spin = (Math.random() * 300 - 150) + "deg";
+    n.style.left = (Math.random() * 100) + "vw";
+    n.style.fontSize = size + "px";
+    n.style.animationDuration = duration + "s";
+    n.style.setProperty("--drift", drift);
+    n.style.setProperty("--spin", spin);
+    field.appendChild(n);
+    setTimeout(() => n.remove(), duration * 1000 + 200);
+  }
+  const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (prefersReducedMotion) return;
+  for (let i = 0; i < 8; i++) setTimeout(spawn, i * 450);
+  setInterval(spawn, 1400);
+})();
+</script>
+</body>
+</html>
