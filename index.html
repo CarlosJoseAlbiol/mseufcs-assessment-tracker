@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MSEUF Concert Singers — Sign In</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --parchment:#FAF6EC;
+    --parchment-deep:#F1E9D8;
+    --maroon-deep:#210306;
+    --maroon:#4A0810;
+    --crimson:#6B0F1F;
+    --crimson-bright:#93172A;
+    --gold:#D4A017;
+    --gold-light:#F2D479;
+    --ink:#2B211A;
+    --ink-soft:#5c4f42;
+    --danger:#A23B2E;
+    --radius:14px;
+    --shadow: 0 18px 40px -18px rgba(43,33,26,0.35);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    background:
+      radial-gradient(circle at 50% 30%, var(--maroon) 0%, var(--maroon-deep) 65%, #12000A 100%);
+    font-family:'Inter',sans-serif;
+    color:var(--ink);
+    padding:24px;
+    position:relative;
+    overflow:hidden;
+  }
+  .hero-logo{
+    position:relative; z-index:1;
+    width:118px; height:118px;
+    margin:0 auto 18px;
+    display:block;
+    filter:drop-shadow(0 10px 26px rgba(0,0,0,0.55));
+  }
+  .notes-field{ position:fixed; inset:0; overflow:hidden; pointer-events:none; z-index:0; }
+  .note{
+    position:absolute; top:-40px;
+    color:var(--gold-light);
+    opacity:0.5;
+    font-family:'Fraunces',serif;
+    user-select:none;
+    animation-name: note-fall;
+    animation-timing-function:linear;
+    animation-fill-mode:forwards;
+    text-shadow:0 0 8px rgba(242,212,121,0.35);
+  }
+  @keyframes note-fall{
+    0%{ transform:translateY(0) translateX(0) rotate(0deg); opacity:0; }
+    8%{ opacity:0.55; }
+    92%{ opacity:0.4; }
+    100%{ transform:translateY(112vh) translateX(var(--drift,20px)) rotate(var(--spin,180deg)); opacity:0; }
+  }
+  .card{
+    position:relative; z-index:1;
+    width:100%;
+    max-width:420px;
+    background:#fff;
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    border:1px solid var(--parchment-deep);
+    overflow:hidden;
+  }
+  .card__band{
+    background:linear-gradient(135deg,var(--crimson) 0%,var(--crimson-bright) 100%);
+    padding:26px 32px 26px;
+    color:#fff;
+    text-align:center;
+    position:relative;
+  }
+  .card__band::after{
+    content:"";
+    position:absolute;
+    left:0; right:0; bottom:-1px;
+    height:6px;
+    background:linear-gradient(90deg,var(--gold-light),var(--gold) 50%,var(--gold-light));
+  }
+  .card__band h1{
+    margin:0 0 4px;
+    font-family:'Fraunces',serif;
+    font-weight:600;
+    font-size:22px;
+    letter-spacing:0.2px;
+  }
+  .card__band p{
+    margin:0;
+    font-size:13px;
+    color:rgba(255,255,255,0.82);
+    letter-spacing:0.3px;
+  }
+  .card__body{ padding:28px 32px 32px; }
+  .tabs{
+    display:flex;
+    background:var(--parchment-deep);
+    border-radius:999px;
+    padding:4px;
+    margin-bottom:22px;
+  }
+  .tabs button{
+    flex:1;
+    border:none;
+    background:transparent;
+    padding:9px 0;
+    font-family:'Inter',sans-serif;
+    font-weight:600;
+    font-size:13px;
+    color:var(--ink-soft);
+    border-radius:999px;
+    cursor:pointer;
+    transition:all .18s ease;
+  }
+  .tabs button.active{
+    background:#fff;
+    color:var(--crimson);
+    box-shadow:0 4px 10px -4px rgba(43,33,26,0.25);
+  }
+  label{
+    display:block;
+    font-size:12px;
+    font-weight:600;
+    color:var(--ink-soft);
+    margin:14px 0 6px;
+    letter-spacing:0.3px;
+    text-transform:uppercase;
+  }
+  input{
+    width:100%;
+    padding:11px 13px;
+    border-radius:9px;
+    border:1.5px solid var(--parchment-deep);
+    background:var(--parchment);
+    font-family:'Inter',sans-serif;
+    font-size:14px;
+    color:var(--ink);
+    outline:none;
+    transition:border-color .15s ease;
+  }
+  input:focus{ border-color:var(--gold); }
+  #name-field{ display:none; }
+  button.submit{
+    width:100%;
+    margin-top:22px;
+    padding:12px 0;
+    border:none;
+    border-radius:9px;
+    background:var(--crimson);
+    color:#fff;
+    font-family:'Inter',sans-serif;
+    font-weight:700;
+    font-size:14px;
+    letter-spacing:0.3px;
+    cursor:pointer;
+    transition:background .15s ease, transform .1s ease;
+  }
+  button.submit:hover{ background:var(--crimson-bright); }
+  button.submit:active{ transform:scale(0.98); }
+  button.submit:disabled{ opacity:0.6; cursor:default; }
+  .msg{
+    margin-top:14px;
+    font-size:13px;
+    line-height:1.45;
+    padding:10px 12px;
+    border-radius:8px;
+    display:none;
+  }
+  .msg.error{ display:block; background:#FBEAE7; color:var(--danger); border:1px solid #F0C9C2; }
+  .msg.info{ display:block; background:#F1E9D8; color:var(--ink-soft); border:1px solid #E4D5AF; }
+  .footnote{
+    margin-top:20px;
+    text-align:center;
+    font-size:12px;
+    color:var(--ink-soft);
+    line-height:1.5;
+  }
+  :focus-visible{ outline:2px solid var(--gold); outline-offset:2px; }
+  @media (prefers-reduced-motion: reduce){ *{transition:none !important;} }
+</style>
+</head>
+<body>
+
+<div class="notes-field" id="notes-field" aria-hidden="true"></div>
+
+<img src="img/logo.jpg" alt="MSEUF Concert Singers" class="hero-logo">
+
+<div class="card">
+  <div class="card__band">
+    <h1>MSEUF Concert Singers</h1>
+    <p>Trainee Assessment Portal</p>
+  </div>
+  <div class="card__body">
+    <div class="tabs">
+      <button type="button" id="tab-login" class="active">Sign In</button>
+      <button type="button" id="tab-signup">Create Account</button>
+    </div>
+
+    <form id="auth-form">
+      <div id="name-field">
+        <label for="name">Full name</label>
+        <input type="text" id="name" placeholder="e.g. Carlos Dela Cruz" autocomplete="name">
+      </div>
+      <label for="email">Email</label>
+      <input type="email" id="email" required autocomplete="email" placeholder="you@mseuf.edu.ph">
+      <label for="password">Password</label>
+      <input type="password" id="password" required autocomplete="current-password" placeholder="At least 6 characters">
+      <button type="submit" class="submit" id="submit-btn">Sign In</button>
+      <div class="msg" id="msg"></div>
+    </form>
+
+    <p class="footnote">New accounts start as trainees.<br>Master of Initiation access is granted from inside the MI dashboard.</p>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+import {
+  getAuth, onAuthStateChanged,
+  createUserWithEmailAndPassword, signInWithEmailAndPassword
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+import {
+  getFirestore, doc, getDoc, setDoc, serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+import { firebaseConfig } from "./js/firebase-config.js";
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+// ---- UI: switch between Sign In / Create Account -------------------
+const tabLogin = document.getElementById("tab-login");
+const tabSignup = document.getElementById("tab-signup");
+const nameField = document.getElementById("name-field");
+const submitBtn = document.getElementById("submit-btn");
+const form = document.getElementById("auth-form");
+const msg = document.getElementById("msg");
+let mode = "login";
+
+function setMode(next){
+  mode = next;
+  tabLogin.classList.toggle("active", mode === "login");
+  tabSignup.classList.toggle("active", mode === "signup");
+  nameField.style.display = mode === "signup" ? "block" : "none";
+  submitBtn.textContent = mode === "signup" ? "Create Account" : "Sign In";
+  msg.className = "msg";
+}
+tabLogin.addEventListener("click", () => setMode("login"));
+tabSignup.addEventListener("click", () => setMode("signup"));
+
+function showError(text){
+  msg.textContent = text;
+  msg.className = "msg error";
+}
+function showInfo(text){
+  msg.textContent = text;
+  msg.className = "msg info";
+}
+
+// ---- Redirect if already signed in ----------------------------------
+onAuthStateChanged(auth, async (user) => {
+  if (!user) return;
+  const profile = await ensureProfile(user);
+  window.location.href = profile.role === "mi" ? "mi.html" : "trainee.html";
+});
+
+async function ensureProfile(user, name){
+  const ref = doc(db, "users", user.uid);
+  const snap = await getDoc(ref);
+  if (!snap.exists()){
+    const data = {
+      name: name || user.email.split("@")[0],
+      email: user.email,
+      role: "trainee",
+      voicePart: "",
+      createdAt: serverTimestamp()
+    };
+    await setDoc(ref, data);
+    return data;
+  }
+  return snap.data();
+}
+
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const email = document.getElementById("email").value.trim();
+  const password = document.getElementById("password").value;
+  const name = document.getElementById("name").value.trim();
+  submitBtn.disabled = true;
+  msg.className = "msg";
+
+  try{
+    if (mode === "signup"){
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+      await ensureProfile(cred.user, name);
+      showInfo("Account created — signing you in…");
+    } else {
+      await signInWithEmailAndPassword(auth, email, password);
+    }
+    // onAuthStateChanged above handles the redirect
+  } catch(err){
+    submitBtn.disabled = false;
+    const code = err.code || "";
+    if (code.includes("email-already-in-use")) showError("That email already has an account — try Sign In instead.");
+    else if (code.includes("invalid-credential") || code.includes("wrong-password") || code.includes("user-not-found")) showError("Incorrect email or password.");
+    else if (code.includes("weak-password")) showError("Password should be at least 6 characters.");
+    else if (code.includes("invalid-email")) showError("That email address doesn't look right.");
+    else showError("Something went wrong: " + (err.message || code));
+  }
+});
+</script>
+
+<script>
+// Gentle falling musical notes in the background — purely decorative,
+// pointer-events are disabled on the container so it never blocks clicks.
+(function(){
+  const field = document.getElementById("notes-field");
+  if (!field) return;
+  const symbols = ["♪","♫","♩","♬","♭"];
+  function spawn(){
+    const n = document.createElement("span");
+    n.className = "note";
+    n.textContent = symbols[Math.floor(Math.random() * symbols.length)];
+    const size = 14 + Math.random() * 20;
+    const duration = 10 + Math.random() * 8;
+    const drift = (Math.random() * 90 - 45) + "px";
+    const spin = (Math.random() * 300 - 150) + "deg";
+    n.style.left = (Math.random() * 100) + "vw";
+    n.style.fontSize = size + "px";
+    n.style.animationDuration = duration + "s";
+    n.style.setProperty("--drift", drift);
+    n.style.setProperty("--spin", spin);
+    field.appendChild(n);
+    setTimeout(() => n.remove(), duration * 1000 + 200);
+  }
+  const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (prefersReducedMotion) return;
+  for (let i = 0; i < 10; i++) setTimeout(spawn, i * 350);
+  setInterval(spawn, 1100);
+})();
+</script>
+</body>
+</html>
