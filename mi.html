@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MI Dashboard — MSEUF Concert Singers</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --parchment:#FAF6EC;
+    --parchment-deep:#F1E9D8;
+    --maroon-deep:#210306;
+    --maroon:#4A0810;
+    --crimson:#6B0F1F;
+    --crimson-bright:#93172A;
+    --gold:#D4A017;
+    --gold-light:#F2D479;
+    --ink:#2B211A;
+    --ink-soft:#5c4f42;
+    --success:#3C7A5C;
+    --success-bg:#E7F0EA;
+    --danger:#A23B2E;
+    --danger-bg:#FBEAE7;
+    --radius:14px;
+    --shadow: 0 18px 40px -18px rgba(43,33,26,0.35);
+  }
+  *{box-sizing:border-box;}
+  html,body{ margin:0; }
+  body{
+    min-height:100vh;
+    background:
+      radial-gradient(circle at 10% 0%, rgba(201,162,39,0.08), transparent 40%),
+      var(--parchment);
+    font-family:'Inter',sans-serif;
+    color:var(--ink);
+  }
+  header{
+    background:
+      radial-gradient(circle at 15% -20%, rgba(242,212,121,0.14), transparent 55%),
+      linear-gradient(135deg,var(--maroon) 0%,var(--crimson) 55%,var(--crimson-bright) 100%);
+    color:#fff;
+    padding:14px 24px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:16px;
+    position:sticky; top:0; z-index:20;
+    box-shadow:var(--shadow);
+  }
+  header .brand{ display:flex; align-items:center; gap:12px; }
+  header .seal{
+    width:42px;height:42px;border-radius:50%;
+    border:2px solid var(--gold-light);
+    overflow:hidden;
+    flex-shrink:0;
+    box-shadow:0 2px 10px rgba(0,0,0,0.35);
+  }
+  header .seal img{ width:100%; height:100%; object-fit:cover; display:block; }
+  header h1{ margin:0; font-family:'Fraunces',serif; font-weight:600; font-size:18px; }
+  header p{ margin:0; font-size:12px; color:rgba(255,255,255,0.78); }
+  header .who{ text-align:right; }
+  header .who .name{ font-weight:600; font-size:13px; }
+  header .who .badge{
+    display:inline-block; margin-top:2px;
+    font-size:9.5px; font-weight:700; letter-spacing:0.5px; text-transform:uppercase;
+    background:var(--gold); color:var(--crimson); padding:2px 8px; border-radius:999px;
+  }
+  header .who button{
+    display:block; margin-top:6px; margin-left:auto;
+    background:rgba(255,255,255,0.14);
+    border:1px solid rgba(255,255,255,0.35);
+    color:#fff; font-size:11px; padding:5px 10px; border-radius:999px; cursor:pointer;
+  }
+  header .who button:hover{ background:rgba(255,255,255,0.24); }
+
+  .notes-field{ position:fixed; inset:0; overflow:hidden; pointer-events:none; z-index:0; }
+  .note{
+    position:absolute; top:-40px;
+    color:var(--gold);
+    opacity:0.16;
+    font-family:'Fraunces',serif;
+    user-select:none;
+    animation-name: note-fall;
+    animation-timing-function:linear;
+    animation-fill-mode:forwards;
+  }
+  @keyframes note-fall{
+    0%{ transform:translateY(0) translateX(0) rotate(0deg); opacity:0; }
+    8%{ opacity:0.22; }
+    92%{ opacity:0.16; }
+    100%{ transform:translateY(112vh) translateX(var(--drift,20px)) rotate(var(--spin,180deg)); opacity:0; }
+  }
+
+  nav.tabs{
+    position:relative; z-index:1;
+    max-width:1100px; margin:0 auto;
+    display:flex; gap:4px; padding:14px 20px 0;
+  }
+  nav.tabs button{
+    border:none; background:transparent; cursor:pointer;
+    font-family:'Inter',sans-serif; font-weight:600; font-size:13.5px;
+    color:var(--ink-soft); padding:10px 16px; border-radius:10px 10px 0 0;
+    border-bottom:3px solid transparent;
+  }
+  nav.tabs button.active{ color:var(--crimson); border-bottom-color:var(--crimson); background:#fff; }
+
+  main{ position:relative; z-index:1; max-width:1100px; margin:0 auto; padding:22px 20px 90px; }
+  .panel{ display:none; }
+  .panel.active{ display:block; }
+
+  .toolbar{
+    display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between;
+    margin-bottom:18px;
+  }
+  .toolbar h2{ margin:0; font-family:'Fraunces',serif; font-size:19px; font-weight:600; }
+  .btn{
+    border:none; border-radius:9px; padding:9px 15px; font-weight:600; font-size:13px;
+    cursor:pointer; font-family:'Inter',sans-serif; transition:background .15s ease, transform .1s ease;
+  }
+  .btn:active{ transform:scale(0.97); }
+  .btn-primary{ background:var(--crimson); color:#fff; }
+  .btn-primary:hover{ background:var(--crimson-bright); }
+  .btn-gold{ background:var(--gold); color:var(--ink); }
+  .btn-gold:hover{ background:var(--gold-light); }
+  .btn-ghost{ background:var(--parchment-deep); color:var(--ink); }
+  .btn-ghost:hover{ background:#e8ddc4; }
+  .btn-danger{ background:var(--danger-bg); color:var(--danger); }
+  .btn-danger:hover{ background:#f3d8d2; }
+  .btn-sm{ padding:6px 11px; font-size:12px; border-radius:7px; }
+
+  .card{
+    background:#fff; border:1px solid var(--parchment-deep); border-radius:var(--radius);
+    padding:18px 20px; margin-bottom:16px;
+  }
+  .card h3{ margin:0 0 14px; font-family:'Fraunces',serif; font-size:15px; font-weight:600; }
+
+  .form-grid{ display:grid; grid-template-columns:1.4fr 1fr 0.9fr auto; gap:10px; align-items:end; }
+  .field label{ display:block; font-size:11px; font-weight:600; color:var(--ink-soft); margin-bottom:5px; text-transform:uppercase; letter-spacing:0.3px; }
+  input,select,textarea{
+    width:100%; padding:9px 11px; border-radius:8px; border:1.5px solid var(--parchment-deep);
+    background:var(--parchment); font-family:'Inter',sans-serif; font-size:13.5px; color:var(--ink); outline:none;
+  }
+  input:focus,select:focus,textarea:focus{ border-color:var(--gold); }
+  textarea{ resize:vertical; min-height:56px; }
+
+  .cat-group{ margin-bottom:14px; }
+  .cat-group h4{
+    margin:0 0 8px; font-size:11.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;
+  }
+  .cat-Easy h4, .tag-Easy{ color:var(--success); }
+  .cat-Medium h4, .tag-Medium{ color:#8A6A11; }
+  .cat-Hard h4, .tag-Hard{ color:var(--danger); }
+  .cat-Intermediate h4, .tag-Intermediate{ color:#5A3FA0; }
+
+  table{ width:100%; border-collapse:collapse; font-size:13.5px; }
+  th{ text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:0.3px; color:var(--ink-soft); padding:8px 10px; border-bottom:2px solid var(--parchment-deep); }
+  td{ padding:9px 10px; border-bottom:1px solid var(--parchment-deep); vertical-align:middle; }
+  tr:last-child td{ border-bottom:none; }
+  .cat-badge{
+    display:inline-block; font-size:9.5px; font-weight:700; letter-spacing:0.4px; text-transform:uppercase;
+    padding:2px 7px; border-radius:999px;
+  }
+  .cat-badge.Easy{ background:#E7F0EA; color:var(--success); }
+  .cat-badge.Medium{ background:#FBF1DA; color:#8A6A11; }
+  .cat-badge.Hard{ background:#FBEAE7; color:var(--danger); }
+  .cat-badge.Intermediate{ background:#E9E4F5; color:#5A3FA0; }
+  .row-actions{ display:flex; gap:6px; }
+  .icon-btn{
+    border:none; background:var(--parchment-deep); border-radius:6px; padding:5px 9px; cursor:pointer; font-size:12px;
+  }
+  .icon-btn:hover{ background:#e8ddc4; }
+  .icon-btn.danger{ background:var(--danger-bg); color:var(--danger); }
+  .icon-btn.danger:hover{ background:#f3d8d2; }
+
+  .checkbox-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:6px 14px; }
+  .checkbox-row{ display:flex; align-items:center; gap:7px; font-size:13px; padding:3px 0; }
+  .checkbox-row input{ width:auto; }
+
+  .assessment-card{ border:1px solid var(--parchment-deep); border-radius:12px; margin-bottom:14px; overflow:hidden; }
+  .assessment-card__head{
+    display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
+    padding:14px 18px; background:var(--parchment-deep);
+  }
+  .assessment-card__head .title-block h3{ margin:0; font-size:15px; }
+  .assessment-card__head .date{ font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--crimson); font-weight:500; }
+  .assessment-card__body{ padding:14px 18px; }
+  .chip-row{ display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+  .chip{ font-size:11px; font-weight:600; padding:4px 10px; border-radius:999px; }
+  .chip.mastered{ background:var(--success-bg); color:var(--success); }
+  .chip.notyet{ background:var(--danger-bg); color:var(--danger); }
+  .chip.pending{ background:var(--parchment-deep); color:var(--ink-soft); }
+  .song-chip{ font-size:12px; background:#fff; border:1px solid var(--parchment-deep); padding:4px 10px; border-radius:999px; margin:3px 4px 0 0; display:inline-block; }
+
+  .trainee-row{ cursor:pointer; }
+  .trainee-row:hover{ background:var(--parchment-deep); }
+  .expand-panel{ display:none; padding:14px 18px; background:var(--parchment); border-top:1px solid var(--parchment-deep); }
+  .expand-panel.open{ display:block; }
+  .mini-song-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:7px 4px; border-bottom:1px solid var(--parchment-deep); font-size:13px; }
+  .mini-song-row:last-child{ border-bottom:none; }
+  .stamp-btn{
+    width:30px;height:30px;border-radius:50%;border:1.5px solid var(--parchment-deep);background:#fff;cursor:pointer;font-size:14px;
+    display:inline-flex;align-items:center;justify-content:center;margin-left:4px; color:var(--ink-soft);
+  }
+  .stamp-btn.check.active{ background:var(--success); border-color:var(--success); color:#fff; }
+  .stamp-btn.cross.active{ background:var(--danger); border-color:var(--danger); color:#fff; }
+
+  .role-badge{ font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.4px; padding:3px 9px; border-radius:999px; }
+  .role-badge.mi{ background:var(--gold); color:var(--crimson); }
+  .role-badge.trainee{ background:var(--parchment-deep); color:var(--ink-soft); }
+
+  .empty{ text-align:center; padding:40px 20px; color:var(--ink-soft); font-size:13.5px; }
+  .loading{ text-align:center; padding:50px 0; color:var(--ink-soft); font-size:13px; }
+  .toast{
+    position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
+    background:var(--ink); color:#fff; padding:10px 20px; border-radius:999px; font-size:13px;
+    opacity:0; pointer-events:none; transition:opacity .25s ease; z-index:50;
+  }
+  .toast.show{ opacity:1; }
+
+  :focus-visible{ outline:2px solid var(--gold); outline-offset:2px; }
+  @media (max-width:700px){
+    .form-grid{ grid-template-columns:1fr; }
+    nav.tabs{ overflow-x:auto; }
+  }
+  @media (prefers-reduced-motion: reduce){ *{transition:none !important;} }
+</style>
+</head>
+<body>
+
+<div class="notes-field" id="notes-field" aria-hidden="true"></div>
+
+<header>
+  <div class="brand">
+    <div class="seal"><img src="img/logo.jpg" alt="MSEUF Concert Singers"></div>
+    <div>
+      <h1>MSEUF Concert Singers</h1>
+      <p>Master of Initiation Dashboard</p>
+    </div>
+  </div>
+  <div class="who">
+    <div class="name" id="who-name">—</div>
+    <span class="badge">Master of Initiation</span>
+    <button id="signout-btn">Sign Out</button>
+  </div>
+</header>
+
+<nav class="tabs">
+  <button data-tab="repertoire" class="active">Repertoire</button>
+  <button data-tab="schedule">Schedule</button>
+  <button data-tab="trainees">Trainees</button>
+</nav>
+
+<main>
+
+  <!-- ============ REPERTOIRE TAB ============ -->
+  <section id="panel-repertoire" class="panel active">
+    <div class="toolbar">
+      <h2>Song Repertoire</h2>
+      <button class="btn btn-gold" id="seed-songs-btn">Load Master Repertoire (57 songs)</button>
+    </div>
+
+    <div class="card">
+      <h3>Add a Song</h3>
+      <div class="form-grid">
+        <div class="field"><label for="song-title">Title</label><input id="song-title" placeholder="e.g. Ave Verum Corpus"></div>
+        <div class="field"><label for="song-composer">Composer / Arranger</label><input id="song-composer" placeholder="Optional"></div>
+        <div class="field">
+          <label for="song-category">Difficulty</label>
+          <select id="song-category">
+            <option>Easy</option><option>Medium</option><option>Hard</option><option>Intermediate</option>
+          </select>
+        </div>
+        <div class="field"><button class="btn btn-primary" id="add-song-btn">Add Song</button></div>
+      </div>
+    </div>
+
+    <div id="songs-list" class="loading">Loading repertoire…</div>
+  </section>
+
+  <!-- ============ SCHEDULE TAB ============ -->
+  <section id="panel-schedule" class="panel">
+    <div class="toolbar">
+      <h2>Assessment Schedule</h2>
+      <button class="btn btn-gold" id="seed-schedule-btn">Load Suggested Schedule (9 dates)</button>
+    </div>
+
+    <div class="card">
+      <h3 id="assessment-form-title">Add an Assessment</h3>
+      <input type="hidden" id="assessment-edit-id">
+      <div class="form-grid" style="grid-template-columns:1.4fr 1fr auto;">
+        <div class="field"><label for="assessment-title">Title</label><input id="assessment-title" placeholder="e.g. September Assessment 1"></div>
+        <div class="field"><label for="assessment-date">Date</label><input type="date" id="assessment-date"></div>
+        <div class="field"><button class="btn btn-primary" id="save-assessment-btn">Add Assessment</button></div>
+      </div>
+      <div class="field" style="margin-top:10px;"><label for="assessment-notes">Notes (optional)</label><textarea id="assessment-notes" placeholder="Anything trainees should know about this assessment"></textarea></div>
+      <div style="margin-top:12px;">
+        <label style="display:block; font-size:11px; font-weight:600; color:var(--ink-soft); margin-bottom:8px; text-transform:uppercase; letter-spacing:0.3px;">Songs for this assessment</label>
+        <div id="song-checkboxes"></div>
+      </div>
+    </div>
+
+    <div id="assessments-list" class="loading">Loading schedule…</div>
+  </section>
+
+  <!-- ============ TRAINEES TAB ============ -->
+  <section id="panel-trainees" class="panel">
+    <div class="toolbar">
+      <h2>Trainees &amp; Progress</h2>
+    </div>
+    <div id="trainees-list" class="loading">Loading roster…</div>
+  </section>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+import {
+  getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc,
+  collection, getDocs, query, orderBy, onSnapshot, serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+import { firebaseConfig } from "./js/firebase-config.js";
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+let currentUser = null;
+let songs = [];             // [{id, title, composer, category}]
+let songsById = {};
+let assessments = [];       // [{id, title, date, notes, songIds}]
+let progressAll = [];       // every progress doc, for aggregate + per-trainee views
+let users = [];             // [{id, name, email, role, voicePart}]
+let selectedSongIds = new Set(); // for the assessment form's checkbox picker
+let openTraineeId = null;
+
+// ---- Auth gate: MI only. Trainees get bounced to their own dashboard. ----
+onAuthStateChanged(auth, async (user) => {
+  if (!user){ window.location.href = "index.html"; return; }
+  const profSnap = await getDoc(doc(db, "users", user.uid));
+  const profile = profSnap.exists() ? profSnap.data() : null;
+  if (!profile){ window.location.href = "index.html"; return; }
+  if (profile.role !== "mi"){ window.location.href = "trainee.html"; return; }
+
+  currentUser = user;
+  document.getElementById("who-name").textContent = profile.name || user.email;
+  listenSongs();
+  listenAssessments();
+  listenProgress();
+  listenUsers();
+});
+
+document.getElementById("signout-btn").addEventListener("click", () => signOut(auth));
+
+function toast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.classList.remove("show"), 2200);
+}
+function escapeHtml(str){
+  return String(str ?? "").replace(/[&<>"']/g, m => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m]));
+}
+function fmtDate(iso){
+  if (!iso) return "No date set";
+  const d = new Date(iso + "T00:00:00");
+  if (isNaN(d)) return iso;
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+// ---- Tabs ----------------------------------------------------------
+document.querySelectorAll("nav.tabs button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("nav.tabs button").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+    btn.classList.add("active");
+    document.getElementById("panel-" + btn.dataset.tab).classList.add("active");
+  });
+});
+
+// =====================================================================
+// SONGS
+// =====================================================================
+function listenSongs(){
+  onSnapshot(collection(db, "songs"), (snap) => {
+    songs = []; songsById = {};
+    snap.forEach(d => { const data = { id: d.id, ...d.data() }; songs.push(data); songsById[d.id] = data; });
+    songs.sort((a,b) => a.title.localeCompare(b.title));
+    renderSongs();
+    renderSongCheckboxes();
+    renderAssessments(); // depends on songsById
+    renderTrainees();
+  });
+}
+
+document.getElementById("add-song-btn").addEventListener("click", async () => {
+  const title = document.getElementById("song-title").value.trim();
+  const composer = document.getElementById("song-composer").value.trim();
+  const category = document.getElementById("song-category").value;
+  if (!title){ toast("Enter a song title first."); return; }
+  const id = slugify(title) + "-" + Math.random().toString(36).slice(2,6);
+  await setDoc(doc(db, "songs", id), { title, composer, category, createdAt: serverTimestamp() });
+  document.getElementById("song-title").value = "";
+  document.getElementById("song-composer").value = "";
+  toast("Song added.");
+});
+
+function slugify(s){ return s.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/(^-|-$)/g,""); }
+
+function renderSongs(){
+  const el = document.getElementById("songs-list");
+  if (!songs.length){
+    el.innerHTML = `<div class="empty">No songs yet. Add one above, or load the master repertoire.</div>`;
+    return;
+  }
+  const cats = ["Easy","Medium","Hard","Intermediate"];
+  el.innerHTML = cats.map(cat => {
+    const list = songs.filter(s => s.category === cat);
+    if (!list.length) return "";
+    return `
+      <div class="card cat-${cat}">
+        <h3>${cat} <span style="color:var(--ink-soft); font-weight:500; font-size:12px;">(${list.length})</span></h3>
+        <table>
+          <thead><tr><th>Title</th><th>Composer / Arranger</th><th></th></tr></thead>
+          <tbody>
+            ${list.map(s => `
+              <tr data-id="${s.id}">
+                <td class="cell-title">${escapeHtml(s.title)}</td>
+                <td class="cell-composer">${escapeHtml(s.composer) || "—"}</td>
+                <td>
+                  <div class="row-actions">
+                    <button class="icon-btn edit-song" data-id="${s.id}">Edit</button>
+                    <button class="icon-btn danger del-song" data-id="${s.id}">Delete</button>
+                  </div>
+                </td>
+              </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>`;
+  }).join("");
+
+  el.querySelectorAll(".del-song").forEach(b => b.addEventListener("click", async () => {
+    if (!confirm("Delete this song? It will be removed from any assessments too.")) return;
+    await deleteDoc(doc(db, "songs", b.dataset.id));
+    toast("Song deleted.");
+  }));
+
+  el.querySelectorAll(".edit-song").forEach(b => b.addEventListener("click", () => {
+    const row = b.closest("tr");
+    const song = songsById[b.dataset.id];
+    row.querySelector(".cell-title").innerHTML = `<input class="edit-title" value="${escapeHtml(song.title)}">`;
+    row.querySelector(".cell-composer").innerHTML = `<input class="edit-composer" value="${escapeHtml(song.composer)}">`;
+    b.textContent = "Save";
+    b.classList.remove("edit-song");
+    b.addEventListener("click", async () => {
+      const title = row.querySelector(".edit-title").value.trim();
+      const composer = row.querySelector(".edit-composer").value.trim();
+      await updateDoc(doc(db, "songs", song.id), { title, composer });
+      toast("Song updated.");
+    }, { once: true });
+  }));
+}
+
+document.getElementById("seed-songs-btn").addEventListener("click", async () => {
+  if (!confirm(`Load the ${MASTER_SONGS.length} songs from the assessment master spreadsheet? Existing songs won't be duplicated.`)) return;
+  let added = 0;
+  for (const s of MASTER_SONGS){
+    const ref = doc(db, "songs", s.id);
+    const existing = await getDoc(ref);
+    if (existing.exists()) continue;
+    await setDoc(ref, { title: s.title, composer: s.composer, category: s.category, createdAt: serverTimestamp() });
+    added++;
+  }
+  toast(`Loaded ${added} new song(s).`);
+});
+
+// =====================================================================
+// ASSESSMENTS
+// =====================================================================
+function renderSongCheckboxes(){
+  const el = document.getElementById("song-checkboxes");
+  const cats = ["Easy","Medium","Hard","Intermediate"];
+  el.innerHTML = cats.map(cat => {
+    const list = songs.filter(s => s.category === cat);
+    if (!list.length) return "";
+    return `
+      <div class="cat-group cat-${cat}">
+        <h4>${cat}</h4>
+        <div class="checkbox-grid">
+          ${list.map(s => `
+            <label class="checkbox-row">
+              <input type="checkbox" class="song-check" value="${s.id}" ${selectedSongIds.has(s.id) ? "checked" : ""}>
+              ${escapeHtml(s.title)}
+            </label>`).join("")}
+        </div>
+      </div>`;
+  }).join("") || `<p style="color:var(--ink-soft); font-size:13px;">Add songs to the repertoire first.</p>`;
+
+  el.querySelectorAll(".song-check").forEach(cb => cb.addEventListener("change", () => {
+    if (cb.checked) selectedSongIds.add(cb.value); else selectedSongIds.delete(cb.value);
+  }));
+}
+
+function listenAssessments(){
+  onSnapshot(query(collection(db, "assessments"), orderBy("date","asc")), (snap) => {
+    assessments = [];
+    snap.forEach(d => assessments.push({ id: d.id, ...d.data() }));
+    renderAssessments();
+  });
+}
+
+function resetAssessmentForm(){
+  document.getElementById("assessment-edit-id").value = "";
+  document.getElementById("assessment-title").value = "";
+  document.getElementById("assessment-date").value = "";
+  document.getElementById("assessment-notes").value = "";
+  document.getElementById("assessment-form-title").textContent = "Add an Assessment";
+  document.getElementById("save-assessment-btn").textContent = "Add Assessment";
+  selectedSongIds = new Set();
+  renderSongCheckboxes();
+}
+
+document.getElementById("save-assessment-btn").addEventListener("click", async () => {
+  const title = document.getElementById("assessment-title").value.trim();
+  const date = document.getElementById("assessment-date").value;
+  const notes = document.getElementById("assessment-notes").value.trim();
+  const editId = document.getElementById("assessment-edit-id").value;
+  if (!title || !date){ toast("Give the assessment a title and a date."); return; }
+  const payload = { title, date, notes, songIds: Array.from(selectedSongIds) };
+  if (editId){
+    await updateDoc(doc(db, "assessments", editId), payload);
+    toast("Assessment updated.");
+  } else {
+    await setDoc(doc(db, "assessments", crypto.randomUUID()), { ...payload, createdAt: serverTimestamp() });
+    toast("Assessment added.");
+  }
+  resetAssessmentForm();
+});
+
+function renderAssessments(){
+  const el = document.getElementById("assessments-list");
+  if (!assessments.length){
+    el.innerHTML = `<div class="empty">No assessments scheduled yet.</div>`;
+    return;
+  }
+  el.innerHTML = assessments.map(a => {
+    const songIds = a.songIds || [];
+    const counts = { mastered:0, not_mastered:0, pending:0 };
+    songIds.forEach(sid => {
+      const entries = progressAll.filter(p => p.assessmentId === a.id && p.songId === sid);
+      // pending = no trainee has marked it at all counts loosely; we just tally marked entries
+    });
+    const marked = progressAll.filter(p => p.assessmentId === a.id);
+    marked.forEach(p => { if (p.status === "mastered") counts.mastered++; else if (p.status === "not_mastered") counts.not_mastered++; });
+
+    return `
+      <div class="assessment-card">
+        <div class="assessment-card__head">
+          <div class="title-block">
+            <h3>${escapeHtml(a.title)}</h3>
+          </div>
+          <div class="date">${fmtDate(a.date)}</div>
+        </div>
+        <div class="assessment-card__body">
+          ${a.notes ? `<p style="margin:0 0 10px; font-size:12.5px; color:var(--ink-soft); font-style:italic;">${escapeHtml(a.notes)}</p>` : ""}
+          <div>
+            ${songIds.map(sid => songsById[sid] ? `<span class="song-chip">${escapeHtml(songsById[sid].title)}</span>` : "").join("")}
+            ${!songIds.length ? '<span style="color:var(--ink-soft); font-size:13px;">No songs assigned yet.</span>' : ""}
+          </div>
+          <div class="chip-row">
+            <span class="chip mastered">${counts.mastered} mastered marks</span>
+            <span class="chip notyet">${counts.not_mastered} not-yet marks</span>
+          </div>
+          <div class="row-actions" style="margin-top:12px;">
+            <button class="icon-btn edit-assessment" data-id="${a.id}">Edit</button>
+            <button class="icon-btn danger del-assessment" data-id="${a.id}">Delete</button>
+          </div>
+        </div>
+      </div>`;
+  }).join("");
+
+  el.querySelectorAll(".del-assessment").forEach(b => b.addEventListener("click", async () => {
+    if (!confirm("Delete this assessment? Trainee marks for it will be orphaned but not auto-deleted.")) return;
+    await deleteDoc(doc(db, "assessments", b.dataset.id));
+    toast("Assessment deleted.");
+  }));
+
+  el.querySelectorAll(".edit-assessment").forEach(b => b.addEventListener("click", () => {
+    const a = assessments.find(x => x.id === b.dataset.id);
+    document.getElementById("assessment-edit-id").value = a.id;
+    document.getElementById("assessment-title").value = a.title;
+    document.getElementById("assessment-date").value = a.date;
+    document.getElementById("assessment-notes").value = a.notes || "";
+    document.getElementById("assessment-form-title").textContent = "Edit Assessment";
+    document.getElementById("save-assessment-btn").textContent = "Save Changes";
+    selectedSongIds = new Set(a.songIds || []);
+    renderSongCheckboxes();
+    document.getElementById("panel-schedule").scrollIntoView({ behavior:"smooth" });
+  }));
+}
+
+document.getElementById("seed-schedule-btn").addEventListener("click", async () => {
+  if (!confirm(`Load the ${MASTER_SCHEDULE.length} suggested assessment dates? Make sure you've loaded the master repertoire first so songs match up.`)) return;
+  let added = 0;
+  for (const a of MASTER_SCHEDULE){
+    const ref = doc(db, "assessments", "seed-" + slugify(a.title));
+    const existing = await getDoc(ref);
+    if (existing.exists()) continue;
+    await setDoc(ref, { title: a.title, date: a.date, notes: "", songIds: a.songIds, createdAt: serverTimestamp() });
+    added++;
+  }
+  toast(`Loaded ${added} new assessment(s).`);
+});
+
+// =====================================================================
+// PROGRESS (shared listener, used by both Schedule + Trainees tabs)
+// =====================================================================
+function listenProgress(){
+  onSnapshot(collection(db, "progress"), (snap) => {
+    progressAll = [];
+    snap.forEach(d => progressAll.push({ id: d.id, ...d.data() }));
+    renderAssessments();
+    renderTrainees();
+  });
+}
+
+// =====================================================================
+// TRAINEES
+// =====================================================================
+function listenUsers(){
+  onSnapshot(collection(db, "users"), (snap) => {
+    users = [];
+    snap.forEach(d => users.push({ id: d.id, ...d.data() }));
+    users.sort((a,b) => (a.name||"").localeCompare(b.name||""));
+    renderTrainees();
+  });
+}
+
+async function setRole(uid, role){
+  await updateDoc(doc(db, "users", uid), { role });
+  toast(role === "mi" ? "Promoted to Master of Initiation." : "Moved back to trainee.");
+}
+
+async function setProgress(uid, assessmentId, songId, status){
+  const key = `${assessmentId}_${songId}`;
+  const current = progressAll.find(p => p.uid === uid && p.assessmentId === assessmentId && p.songId === songId);
+  const next = current && current.status === status ? "pending" : status;
+  const docId = `${uid}_${assessmentId}_${songId}`;
+  await setDoc(doc(db, "progress", docId), { uid, assessmentId, songId, status: next, updatedAt: serverTimestamp() });
+}
+
+function renderTrainees(){
+  const el = document.getElementById("trainees-list");
+  if (!users.length){ el.innerHTML = `<div class="empty">No accounts yet.</div>`; return; }
+
+  el.innerHTML = `
+    <div class="card">
+      <table>
+        <thead><tr><th>Name</th><th>Email</th><th>Role</th><th></th></tr></thead>
+        <tbody>
+          ${users.map(u => {
+            const isSelf = u.id === currentUser.uid;
+            const progressCount = progressAll.filter(p => p.uid === u.id && p.status === "mastered").length;
+            return `
+            <tr class="trainee-row" data-id="${u.id}">
+              <td>${escapeHtml(u.name)}</td>
+              <td>${escapeHtml(u.email)}</td>
+              <td><span class="role-badge ${u.role}">${u.role === "mi" ? "Master of Initiation" : "Trainee"}</span></td>
+              <td>
+                <div class="row-actions">
+                  ${u.role === "trainee"
+                    ? `<button class="icon-btn promote-btn" data-id="${u.id}">Promote to MI</button>`
+                    : `<button class="icon-btn demote-btn" data-id="${u.id}" ${isSelf ? "disabled title='Cannot demote yourself'" : ""}>Move to Trainee</button>`
+                  }
+                  <button class="icon-btn view-progress-btn" data-id="${u.id}">${u.role === "trainee" ? `View Checklist (${progressCount} mastered)` : "—"}</button>
+                </div>
+              </td>
+            </tr>
+            <tr><td colspan="4" style="padding:0; border:none;">
+              <div class="expand-panel ${openTraineeId === u.id ? "open" : ""}" id="expand-${u.id}"></div>
+            </td></tr>`;
+          }).join("")}
+        </tbody>
+      </table>
+    </div>`;
+
+  el.querySelectorAll(".promote-btn").forEach(b => b.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (confirm("Promote this trainee to Master of Initiation? They will gain full edit access to songs, schedule, and everyone's progress.")) setRole(b.dataset.id, "mi");
+  }));
+  el.querySelectorAll(".demote-btn").forEach(b => b.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (b.disabled) return;
+    if (confirm("Move this Master of Initiation back to trainee?")) setRole(b.dataset.id, "trainee");
+  }));
+  el.querySelectorAll(".view-progress-btn").forEach(b => b.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const uid = b.dataset.id;
+    const user = users.find(u => u.id === uid);
+    if (user.role !== "trainee") return;
+    openTraineeId = openTraineeId === uid ? null : uid;
+    renderTrainees();
+    if (openTraineeId) renderTraineeChecklist(uid);
+  }));
+}
+
+function renderTraineeChecklist(uid){
+  const panel = document.getElementById("expand-" + uid);
+  if (!panel) return;
+  panel.classList.add("open");
+  if (!assessments.length){
+    panel.innerHTML = `<p style="color:var(--ink-soft); font-size:13px;">No assessments scheduled yet.</p>`;
+    return;
+  }
+  panel.innerHTML = assessments.map(a => {
+    const songIds = a.songIds || [];
+    if (!songIds.length) return "";
+    return `
+      <div style="margin-bottom:14px;">
+        <div style="font-weight:600; font-size:13px; margin-bottom:4px;">${escapeHtml(a.title)} <span style="font-weight:400; color:var(--ink-soft); font-size:11.5px;">(${fmtDate(a.date)})</span></div>
+        ${songIds.map(sid => {
+          const song = songsById[sid];
+          if (!song) return "";
+          const entry = progressAll.find(p => p.uid === uid && p.assessmentId === a.id && p.songId === sid);
+          const status = entry ? entry.status : "pending";
+          return `
+            <div class="mini-song-row">
+              <span>${escapeHtml(song.title)} <span class="cat-badge ${song.category}" style="margin-left:6px;">${song.category}</span></span>
+              <span>
+                <button class="stamp-btn check ${status === "mastered" ? "active" : ""}" data-uid="${uid}" data-a="${a.id}" data-s="${sid}" data-status="mastered">✓</button>
+                <button class="stamp-btn cross ${status === "not_mastered" ? "active" : ""}" data-uid="${uid}" data-a="${a.id}" data-s="${sid}" data-status="not_mastered">✕</button>
+              </span>
+            </div>`;
+        }).join("")}
+      </div>`;
+  }).join("") || `<p style="color:var(--ink-soft); font-size:13px;">No songs assigned in any assessment yet.</p>`;
+
+  panel.querySelectorAll(".stamp-btn").forEach(btn => {
+    btn.addEventListener("click", () => setProgress(btn.dataset.uid, btn.dataset.a, btn.dataset.s, btn.dataset.status));
+  });
+}
+
+// =====================================================================
+// SEED DATA — pulled from the BATCH 25 Assessment MI Master Spreadsheet
+// =====================================================================
+const MASTER_SONGS = [
+  {id:"the-lord-bless-you-and-keep-you", title:"The Lord Bless You and Keep You", composer:"", category:"Easy"},
+  {id:"one-thing-i-ask", title:"One Thing I Ask", composer:"Paulo Tirolo", category:"Easy"},
+  {id:"above-all-else", title:"Above All Else", composer:"Joel Raney", category:"Easy"},
+  {id:"viri-galilaei", title:"Viri Galilaei", composer:"Gonzague Money", category:"Easy"},
+  {id:"ave-verum-corpus", title:"Ave Verum Corpus", composer:"Wolfgang Amadeus Mozart", category:"Easy"},
+  {id:"l-important-c-est-la-rose", title:"L'important C'est La Rose", composer:"arr. M. de Leon", category:"Easy"},
+  {id:"izzar-ederrak", title:"Izzar Ederrak", composer:"Josu Elberdin", category:"Easy"},
+  {id:"bonse-aba", title:"Bonse Aba", composer:"Victor C. Johnson", category:"Easy"},
+  {id:"kalesa", title:"Kalesa", composer:"Ermani J. Cuenco", category:"Easy"},
+  {id:"rosas-pandan", title:"Rosas Pandan", composer:"G. Hernandez", category:"Easy"},
+  {id:"manila-manila", title:"Manila, Manila", composer:"arr. Annie Roque Nepomuceno", category:"Easy"},
+  {id:"ikaw-lamang", title:"Ikaw Lamang", composer:"arr. Joven Valeras", category:"Easy"},
+  {id:"til-i-met-you-ssaa", title:"Til I Met You SSAA", composer:"Anna Tabita Abeleda-Piquero", category:"Easy"},
+  {id:"abba-gold", title:"ABBA Gold", composer:"Jack Zaino", category:"Easy"},
+  {id:"dont-stop-me-now", title:"Don't Stop Me Now", composer:"", category:"Easy"},
+  {id:"for-good", title:"For Good", composer:"", category:"Easy"},
+  {id:"why-we-sing", title:"Why We Sing", composer:"", category:"Easy"},
+  {id:"himig-ng-hangin", title:"Himig ng Hangin", composer:"Norman Agatep", category:"Easy"},
+  {id:"bibingka", title:"Bibingka", composer:"arr. Sunny Bautista", category:"Easy"},
+  {id:"a-babe-is-born-in-bethlehem", title:"A Babe is Born in Bethlehem", composer:"", category:"Easy"},
+
+  {id:"gaano-ko-ikaw-kamahal", title:"Gaano Ko Ikaw Kamahal", composer:"Ernani J. Cuenco", category:"Medium"},
+  {id:"nais-ko", title:"Nais Ko", composer:"Ryan Cayabyab", category:"Medium"},
+  {id:"dahil-sa-iyo", title:"Dahil Sa Iyo", composer:"arr. Fabian Obispo Jr.", category:"Medium"},
+  {id:"minsan-ang-minahal-ay-ako", title:"Minsan ang Minahal ay Ako", composer:"Cris Borela", category:"Medium"},
+  {id:"pangarap-ko-ang-ibigin-ka", title:"Pangarap Ko ang Ibigin Ka", composer:"Christopher Ryan Roncales", category:"Medium"},
+  {id:"buhay-ng-buhay-ko", title:"Buhay ng Buhay Ko", composer:"", category:"Medium"},
+  {id:"cebuano-medley", title:"Cebuano Medley", composer:"Eudenice Palaruan", category:"Medium"},
+  {id:"rosita-de-un-verde-palmar", title:"Rosita De Un Verde Palmar", composer:"Manuel Martinez Guirao", category:"Medium"},
+  {id:"bahay", title:"Bahay", composer:"Gary Granada, arr. Robert Delgado", category:"Medium"},
+  {id:"iisang-bangka", title:"Iisang Bangka", composer:"Eudenice Palaruan", category:"Medium"},
+  {id:"kay-ganda-ng-ating-musika", title:"Kay Ganda ng Ating Musika", composer:"Ryan Cayabyab", category:"Medium"},
+  {id:"piliin-mo-ang-pilipinas", title:"Piliin Mo ang Pilipinas", composer:"Normita Rio Pablico", category:"Medium"},
+  {id:"bagani", title:"Bagani", composer:"", category:"Medium"},
+  {id:"noypi", title:"Noypi", composer:"Ariel de Pano", category:"Medium"},
+  {id:"naay", title:"Na'ay", composer:"Nilo Alcala", category:"Medium"},
+  {id:"now-that-i-have-you", title:"Now That I Have You", composer:"arr. Trina Belamide", category:"Medium"},
+  {id:"the-majesty-and-glory-of-your-name", title:"The Majesty and Glory of Your Name", composer:"Tom Fettke", category:"Medium"},
+  {id:"simbang-gabi", title:"Simbang Gabi", composer:"Lucio San Pedro", category:"Medium"},
+  {id:"pasko-na-naman", title:"Pasko Na Naman", composer:"", category:"Medium"},
+  {id:"pasko-ng-madla", title:"Pasko ng Madla", composer:"", category:"Medium"},
+
+  {id:"o-salutaris-hostia", title:"O Salutaris Hostia", composer:"Giocchino Rossini", category:"Hard"},
+  {id:"exultate-justi-in-domino", title:"Exultate Justi in Domino", composer:"Hyun Kook", category:"Hard"},
+  {id:"hallelujah-chorus", title:"Hallelujah Chorus", composer:"", category:"Hard"},
+  {id:"kruhay", title:"Kruhay", composer:"Benny Castillon", category:"Hard"},
+  {id:"chua-ay", title:"Chua-ay", composer:"Fabian Obispo", category:"Hard"},
+  {id:"padayon", title:"Padayon", composer:"Rodolfo Delarmente", category:"Hard"},
+  {id:"leron-leron-sinta", title:"Leron, Leron Sinta", composer:"arr. Saunder Choi", category:"Hard"},
+  {id:"sa-mahal-kong-bayan", title:"Sa Mahal Kong Bayan", composer:"Lucio San Pedro", category:"Hard"},
+  {id:"bituing-walang-ningning", title:"Bituing Walang Ningning", composer:"Robert Delgado", category:"Hard"},
+  {id:"sanay-wala-nang-wakas", title:"Sana'y Wala Nang Wakas", composer:"Robert Delgado", category:"Hard"},
+  {id:"namamasko", title:"Namamasko", composer:"Ily Matthew Maniano", category:"Hard"},
+
+  {id:"alleluia", title:"Alleluia", composer:"Jake Runestad", category:"Intermediate"},
+  {id:"ave-maris-stella", title:"Ave Maris Stella", composer:"", category:"Intermediate"},
+  {id:"talismane", title:"Talismane", composer:"Robert Schumann", category:"Intermediate"},
+  {id:"pamugun", title:"Pamugun", composer:"Francisco F. Feliciano", category:"Intermediate"},
+  {id:"kaisa-isa-niyan", title:"Kaisa-isa Niyan", composer:"Nilo Alcala", category:"Intermediate"},
+  {id:"three-kalinga-chants", title:"Three Kalinga Chants", composer:"Nilo Alcala", category:"Intermediate"},
+];
+
+const MASTER_SCHEDULE = [
+  { title:"September Assessment 1", date:"2026-09-18", songIds:["the-lord-bless-you-and-keep-you","one-thing-i-ask","gaano-ko-ikaw-kamahal","nais-ko","chua-ay"] },
+  { title:"September Assessment 2", date:"2026-10-02", songIds:["above-all-else","viri-galilaei","dahil-sa-iyo","minsan-ang-minahal-ay-ako","padayon"] },
+  { title:"October Assessment 1", date:"2026-10-16", songIds:["ave-verum-corpus","l-important-c-est-la-rose","pangarap-ko-ang-ibigin-ka","buhay-ng-buhay-ko","leron-leron-sinta"] },
+  { title:"October Assessment 2", date:"2026-10-30", songIds:["izzar-ederrak","bonse-aba","cebuano-medley","rosita-de-un-verde-palmar","sa-mahal-kong-bayan"] },
+  { title:"November Assessment 1", date:"2026-11-13", songIds:["kalesa","rosas-pandan","bahay","iisang-bangka","bituing-walang-ningning"] },
+  { title:"November Assessment 2", date:"2026-11-27", songIds:["ikaw-lamang","manila-manila","kay-ganda-ng-ating-musika","piliin-mo-ang-pilipinas","sanay-wala-nang-wakas","kruhay"] },
+  { title:"December Assessment 1", date:"2026-12-11", songIds:["himig-ng-hangin","bibingka","a-babe-is-born-in-bethlehem","simbang-gabi","pasko-na-naman","pasko-ng-madla","namamasko"] },
+  { title:"January Assessment 1", date:"2027-01-15", songIds:["abba-gold","dont-stop-me-now","bagani","noypi","o-salutaris-hostia","exultate-justi-in-domino"] },
+  { title:"January Assessment 2", date:"2027-01-29", songIds:["for-good","why-we-sing","til-i-met-you-ssaa","naay","now-that-i-have-you","the-majesty-and-glory-of-your-name","hallelujah-chorus"] },
+];
+</script>
+
+<script>
+// Gentle falling musical notes in the background — purely decorative,
+// pointer-events are disabled on the container so it never blocks clicks.
+(function(){
+  const field = document.getElementById("notes-field");
+  if (!field) return;
+  const symbols = ["♪","♫","♩","♬","♭"];
+  function spawn(){
+    const n = document.createElement("span");
+    n.className = "note";
+    n.textContent = symbols[Math.floor(Math.random() * symbols.length)];
+    const size = 14 + Math.random() * 20;
+    const duration = 11 + Math.random() * 9;
+    const drift = (Math.random() * 90 - 45) + "px";
+    const spin = (Math.random() * 300 - 150) + "deg";
+    n.style.left = (Math.random() * 100) + "vw";
+    n.style.fontSize = size + "px";
+    n.style.animationDuration = duration + "s";
+    n.style.setProperty("--drift", drift);
+    n.style.setProperty("--spin", spin);
+    field.appendChild(n);
+    setTimeout(() => n.remove(), duration * 1000 + 200);
+  }
+  const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (prefersReducedMotion) return;
+  for (let i = 0; i < 8; i++) setTimeout(spawn, i * 450);
+  setInterval(spawn, 1400);
+})();
+</script>
+</body>
+</html>
