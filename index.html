@@ -10,12 +10,13 @@
   :root{
     --parchment:#FAF6EC;
     --parchment-deep:#F1E9D8;
-    --maroon-deep:#210306;
-    --maroon:#4A0810;
-    --crimson:#6B0F1F;
-    --crimson-bright:#93172A;
-    --gold:#D4A017;
-    --gold-light:#F2D479;
+    --maroon-deep:#170000;
+    --maroon:#3D0000;
+    --crimson:#5C0007;
+    --crimson-bright:#7E0410;
+    --gold-deep:#B8710A;
+    --gold:#F5B301;
+    --gold-light:#FFE45C;
     --ink:#2B211A;
     --ink-soft:#5c4f42;
     --danger:#A23B2E;
@@ -31,7 +32,7 @@
     align-items:center;
     justify-content:center;
     background:
-      radial-gradient(circle at 50% 30%, var(--maroon) 0%, var(--maroon-deep) 65%, #12000A 100%);
+      radial-gradient(circle at 50% 28%, var(--maroon) 0%, var(--maroon-deep) 62%, #0A0000 100%);
     font-family:'Inter',sans-serif;
     color:var(--ink);
     padding:24px;
@@ -46,7 +47,7 @@
     border-radius:50%;
     object-fit:cover;
     border:3px solid var(--gold-light);
-    box-shadow:0 10px 26px rgba(0,0,0,0.55), 0 0 0 6px rgba(242,212,121,0.12);
+    box-shadow:0 10px 26px rgba(0,0,0,0.6), 0 0 0 6px rgba(255,228,92,0.10), 0 0 34px rgba(245,179,1,0.18);
   }
   .notes-field{ position:fixed; inset:0; overflow:hidden; pointer-events:none; z-index:0; }
   .note{
@@ -58,7 +59,7 @@
     animation-name: note-fall;
     animation-timing-function:linear;
     animation-fill-mode:forwards;
-    text-shadow:0 0 8px rgba(242,212,121,0.35);
+    text-shadow:0 0 10px rgba(245,179,1,0.4);
   }
   @keyframes note-fall{
     0%{ transform:translateY(0) translateX(0) rotate(0deg); opacity:0; }
@@ -77,8 +78,10 @@
     overflow:hidden;
   }
   .card__band{
-    background:linear-gradient(135deg,var(--crimson) 0%,var(--crimson-bright) 100%);
-    padding:26px 32px 26px;
+    background:
+      radial-gradient(circle at 50% -10%, rgba(255,228,92,0.10), transparent 55%),
+      linear-gradient(160deg,var(--maroon-deep) 0%,var(--crimson) 55%,var(--crimson-bright) 100%);
+    padding:30px 32px 26px;
     color:#fff;
     text-align:center;
     position:relative;
@@ -88,20 +91,29 @@
     position:absolute;
     left:0; right:0; bottom:-1px;
     height:6px;
-    background:linear-gradient(90deg,var(--gold-light),var(--gold) 50%,var(--gold-light));
+    background:linear-gradient(90deg,var(--gold-deep),var(--gold-light) 50%,var(--gold-deep));
   }
   .card__band h1{
-    margin:0 0 4px;
+    margin:0 0 6px;
     font-family:'Fraunces',serif;
-    font-weight:600;
-    font-size:22px;
-    letter-spacing:0.2px;
+    font-weight:700;
+    font-size:23px;
+    letter-spacing:0.4px;
+    background:linear-gradient(180deg,var(--gold-light) 0%,var(--gold) 48%,var(--gold-deep) 100%);
+    -webkit-background-clip:text;
+    background-clip:text;
+    color:transparent;
+    -webkit-text-fill-color:transparent;
+    filter:drop-shadow(0 1px 1px rgba(0,0,0,0.4));
   }
   .card__band p{
     margin:0;
-    font-size:13px;
-    color:rgba(255,255,255,0.82);
-    letter-spacing:0.3px;
+    font-size:11px;
+    font-style:italic;
+    font-family:'Fraunces',serif;
+    text-transform:uppercase;
+    letter-spacing:2px;
+    color:rgba(255,228,92,0.72);
   }
   .card__body{ padding:28px 32px 32px; }
   .tabs{
@@ -150,26 +162,27 @@
     outline:none;
     transition:border-color .15s ease;
   }
-  input:focus{ border-color:var(--gold); }
+  input:focus{ border-color:var(--gold); box-shadow:0 0 0 3px rgba(245,179,1,0.14); }
   #name-field{ display:none; }
   button.submit{
     width:100%;
     margin-top:22px;
     padding:12px 0;
-    border:none;
+    border:1px solid var(--gold-deep);
     border-radius:9px;
-    background:var(--crimson);
+    background:linear-gradient(135deg,var(--crimson) 0%,var(--crimson-bright) 100%);
     color:#fff;
     font-family:'Inter',sans-serif;
-    font-weight:700;
-    font-size:14px;
-    letter-spacing:0.3px;
+    font-weight:600;
+    font-size:13px;
+    text-transform:uppercase;
+    letter-spacing:1.1px;
     cursor:pointer;
-    transition:background .15s ease, transform .1s ease;
+    transition:background .15s ease, transform .1s ease, box-shadow .15s ease;
   }
-  button.submit:hover{ background:var(--crimson-bright); }
+  button.submit:hover{ background:linear-gradient(135deg,var(--crimson-bright) 0%,var(--maroon) 100%); box-shadow:0 6px 18px -6px rgba(245,179,1,0.35); }
   button.submit:active{ transform:scale(0.98); }
-  button.submit:disabled{ opacity:0.6; cursor:default; }
+  button.submit:disabled{ opacity:0.6; cursor:default; box-shadow:none; }
   .msg{
     margin-top:14px;
     font-size:13px;
@@ -211,10 +224,10 @@
     <form id="auth-form">
       <div id="name-field">
         <label for="name">Full name</label>
-        <input type="text" id="name" placeholder="e.g. Carlos Dela Cruz" autocomplete="name">
+        <input type="text" id="name" placeholder="eg. Stephen Flancia" autocomplete="name">
       </div>
       <label for="email">Email</label>
-      <input type="email" id="email" required autocomplete="email" placeholder="you@mseuf.edu.ph">
+      <input type="email" id="email" required autocomplete="email" placeholder="you@gmail.com">
       <label for="password">Password</label>
       <input type="password" id="password" required autocomplete="current-password" placeholder="At least 6 characters">
       <button type="submit" class="submit" id="submit-btn">Sign In</button>
