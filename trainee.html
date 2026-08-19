@@ -276,7 +276,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 import {
-  getFirestore, doc, getDoc, setDoc, collection, getDocs, query, orderBy,
+  getFirestore, doc, getDoc, setDoc, collection, getDocs, query, orderBy, where,
   onSnapshot, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 import { firebaseConfig } from "./js/firebase-config.js";
@@ -321,24 +321,23 @@ function listenAssessments(){
     assessments = [];
     snap.forEach(d => assessments.push({ id: d.id, ...d.data() }));
     render();
-  });
+  }, (err) => console.error("assessments listener error:", err));
 }
 
 function listenProgress(){
-  // Trainees can only ever read their own progress docs (enforced by
-  // Firestore rules too) — we scope the query client-side via doc IDs
-  // that always start with this uid.
-  const q = collection(db, "progress");
+  // The Firestore rules only let a trainee read progress docs where
+  // uid == their own uid — so the query itself must filter on uid,
+  // otherwise Firestore can't prove every possible result is allowed
+  // and rejects the whole listener (silently, with no visible error).
+  const q = query(collection(db, "progress"), where("uid", "==", currentUser.uid));
   onSnapshot(q, (snap) => {
     progressByKey = {};
     snap.forEach(d => {
       const data = d.data();
-      if (data.uid === currentUser.uid){
-        progressByKey[`${data.assessmentId}_${data.songId}`] = data.status;
-      }
+      progressByKey[`${data.assessmentId}_${data.songId}`] = data.status;
     });
     render();
-  });
+  }, (err) => console.error("progress listener error:", err));
 }
 
 async function setStatus(assessmentId, songId, status){
