@@ -297,7 +297,9 @@ async function ensureProfile(user, name){
       name: name || user.email.split("@")[0],
       email: user.email,
       role: "trainee",
+      rank: "Trainee",
       voicePart: "",
+      lastActive: serverTimestamp(),
       createdAt: serverTimestamp()
     };
     await setDoc(ref, data);
