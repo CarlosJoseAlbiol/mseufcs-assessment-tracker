@@ -214,6 +214,38 @@
   .role-badge{ font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.4px; padding:3px 9px; border-radius:999px; }
   .role-badge.mi{ background:var(--gold); color:var(--crimson); }
   .role-badge.trainee{ background:var(--parchment-deep); color:var(--ink-soft); }
+  .role-badge.senior{ background:#E9E4F5; color:#5A3FA0; }
+
+  .online-dot{ display:inline-block; width:9px; height:9px; border-radius:50%; vertical-align:middle; }
+  .online-dot.online{ background:var(--success); box-shadow:0 0 0 3px rgba(60,122,92,0.18); }
+  .online-dot.offline{ background:#C9BFA9; }
+
+  .status-select{ width:auto; min-width:170px; padding:6px 9px; font-size:12.5px; }
+  .status-select:disabled{ opacity:0.55; cursor:not-allowed; }
+
+  /* ---- Trainee View preview (mirrors trainee.html's own styling) ---- */
+  .preview-stats{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:20px; }
+  .preview-stat{ background:#fff; border:1px solid var(--parchment-deep); border-radius:12px; padding:14px 16px; text-align:center; }
+  .preview-stat .num{ font-family:'Fraunces',serif; font-size:24px; font-weight:600; }
+  .preview-stat .lbl{ font-size:10.5px; text-transform:uppercase; letter-spacing:0.4px; color:var(--ink-soft); margin-top:2px; }
+  .preview-stat.mastered .num{ color:var(--success); }
+  .preview-stat.notyet .num{ color:var(--danger); }
+  .preview-stat.pending .num{ color:var(--gold); }
+  .preview-assessment{ background:#fff; border:1px solid var(--parchment-deep); border-radius:var(--radius); margin-bottom:16px; overflow:hidden; }
+  .preview-assessment__head{ display:flex; align-items:baseline; justify-content:space-between; gap:10px; padding:14px 18px; background:var(--parchment-deep); }
+  .preview-assessment__head h3{ margin:0; font-family:'Fraunces',serif; font-size:15px; font-weight:600; }
+  .preview-assessment__date{ font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--crimson); font-weight:500; }
+  .preview-song-row{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 18px; border-bottom:1px solid var(--parchment-deep); }
+  .preview-song-row:last-child{ border-bottom:none; }
+  .preview-song-title{ font-weight:600; font-size:13.5px; }
+  .preview-song-meta{ font-size:11.5px; color:var(--ink-soft); margin-top:1px; }
+  .stamp-tag{
+    font-family:'Fraunces',serif; font-weight:700; font-size:10px; letter-spacing:0.7px; text-transform:uppercase;
+    padding:4px 9px; border-radius:6px; border:1.5px solid transparent; white-space:nowrap;
+  }
+  .stamp-tag.mastered{ color:var(--success); border-color:var(--success); background:var(--success-bg); }
+  .stamp-tag.notyet{ color:var(--danger); border-color:var(--danger); background:var(--danger-bg); }
+  .stamp-tag.pending{ color:var(--ink-soft); border-color:var(--parchment-deep); background:var(--parchment); }
 
   .empty{ text-align:center; padding:40px 20px; color:var(--ink-soft); font-size:13.5px; }
   .loading{ text-align:center; padding:50px 0; color:var(--ink-soft); font-size:13px; }
@@ -255,6 +287,7 @@
   <button data-tab="repertoire" class="active">Repertoire</button>
   <button data-tab="schedule">Schedule</button>
   <button data-tab="trainees">Trainees</button>
+  <button data-tab="preview">Trainee View</button>
 </nav>
 
 <main>
@@ -317,6 +350,23 @@
     <div id="trainees-list" class="loading">Loading roster…</div>
   </section>
 
+  <!-- ============ TRAINEE VIEW (PREVIEW) TAB ============ -->
+  <section id="panel-preview" class="panel">
+    <div class="toolbar">
+      <h2>Trainee View</h2>
+    </div>
+    <p style="font-size:12.5px; color:var(--ink-soft); margin:-6px 0 16px; max-width:640px;">
+      This shows exactly what the selected trainee sees on their own dashboard —
+      the same schedule, songs, and stamped marks. It's read-only and viewing it
+      never notifies or shows up to them in any way.
+    </p>
+    <div class="card" style="margin-bottom:20px;">
+      <label for="preview-select" style="display:block; font-size:11px; font-weight:600; color:var(--ink-soft); margin-bottom:8px; text-transform:uppercase; letter-spacing:0.3px;">Previewing as</label>
+      <select id="preview-select"><option value="">— Select a trainee —</option></select>
+    </div>
+    <div id="preview-content"></div>
+  </section>
+
 </main>
 
 <div class="toast" id="toast"></div>
@@ -339,9 +389,11 @@ let songs = [];             // [{id, title, composer, category}]
 let songsById = {};
 let assessments = [];       // [{id, title, date, notes, songIds}]
 let progressAll = [];       // every progress doc, for aggregate + per-trainee views
-let users = [];             // [{id, name, email, role, voicePart}]
+let users = [];             // [{id, name, email, role, rank, voicePart, lastActive}]
 let selectedSongIds = new Set(); // for the assessment form's checkbox picker
 let openTraineeId = null;
+let previewUid = "";        // which trainee is currently shown in the Trainee View tab
+const ONLINE_WINDOW_MS = 90 * 1000; // heartbeats every 25s, so 90s covers a couple of missed beats
 
 // ---- Auth gate: MI only. Trainees get bounced to their own dashboard. ----
 onAuthStateChanged(auth, async (user) => {
@@ -357,9 +409,37 @@ onAuthStateChanged(auth, async (user) => {
   listenAssessments();
   listenProgress();
   listenUsers();
+  startHeartbeat();
 });
 
 document.getElementById("signout-btn").addEventListener("click", () => signOut(auth));
+
+// ---- Presence: a lightweight "I'm still here" ping every 25s. Anyone
+// viewing the member list computes online/offline from how recent this
+// timestamp is — there's no separate "online" flag to keep in sync. ----
+function startHeartbeat(){
+  const beat = () => updateDoc(doc(db, "users", currentUser.uid), { lastActive: serverTimestamp() }).catch(() => {});
+  beat();
+  setInterval(beat, 25000);
+  setInterval(() => { renderTrainees(); }, 20000); // recompute stale online dots even without new data
+}
+
+function isOnline(u){
+  const ts = u.lastActive;
+  if (!ts || typeof ts.toMillis !== "function") return false;
+  return (Date.now() - ts.toMillis()) < ONLINE_WINDOW_MS;
+}
+
+function statusValue(u){
+  if (u.role === "mi") return "mi";
+  if (u.rank === "Senior Member") return "senior";
+  return "trainee";
+}
+function statusLabel(u){
+  if (u.role === "mi") return "Master of Initiation";
+  if (u.rank === "Senior Member") return "Senior Member";
+  return "Trainee";
+}
 
 function toast(msg){
   const t = document.getElementById("toast");
@@ -400,6 +480,7 @@ function listenSongs(){
     renderSongCheckboxes();
     renderAssessments(); // depends on songsById
     renderTrainees();
+    renderPreview();
   });
 }
 
@@ -516,6 +597,7 @@ function listenAssessments(){
     assessments = [];
     snap.forEach(d => assessments.push({ id: d.id, ...d.data() }));
     renderAssessments();
+    renderPreview();
   });
 }
 
@@ -631,6 +713,7 @@ function listenProgress(){
     snap.forEach(d => progressAll.push({ id: d.id, ...d.data() }));
     renderAssessments();
     renderTrainees();
+    renderPreview();
   });
 }
 
@@ -643,12 +726,21 @@ function listenUsers(){
     snap.forEach(d => users.push({ id: d.id, ...d.data() }));
     users.sort((a,b) => (a.name||"").localeCompare(b.name||""));
     renderTrainees();
-  });
+    renderPreviewOptions();
+  }, (err) => console.error("users listener error:", err));
 }
 
-async function setRole(uid, role){
-  await updateDoc(doc(db, "users", uid), { role });
-  toast(role === "mi" ? "Promoted to Master of Initiation." : "Moved back to trainee.");
+async function setUserStatus(uid, value){
+  if (value === "mi"){
+    await updateDoc(doc(db, "users", uid), { role: "mi" });
+    toast("Promoted to Master of Initiation.");
+  } else if (value === "senior"){
+    await updateDoc(doc(db, "users", uid), { role: "trainee", rank: "Senior Member" });
+    toast("Marked as Senior Member.");
+  } else {
+    await updateDoc(doc(db, "users", uid), { role: "trainee", rank: "Trainee" });
+    toast("Set as Trainee.");
+  }
 }
 
 async function setProgress(uid, assessmentId, songId, status){
@@ -666,27 +758,33 @@ function renderTrainees(){
   el.innerHTML = `
     <div class="card">
       <table>
-        <thead><tr><th>Name</th><th>Email</th><th>Role</th><th></th></tr></thead>
+        <thead><tr><th>Name</th><th>Email</th><th>Online</th><th>Status</th><th></th></tr></thead>
         <tbody>
           ${users.map(u => {
             const isSelf = u.id === currentUser.uid;
             const progressCount = progressAll.filter(p => p.uid === u.id && p.status === "mastered").length;
+            const online = isOnline(u);
+            const status = statusValue(u);
             return `
             <tr class="trainee-row" data-id="${u.id}">
-              <td>${escapeHtml(u.name)}</td>
+              <td>${escapeHtml(u.name)}${isSelf ? " (You)" : ""}</td>
               <td>${escapeHtml(u.email)}</td>
-              <td><span class="role-badge ${u.role}">${u.role === "mi" ? "Master of Initiation" : "Trainee"}</span></td>
               <td>
-                <div class="row-actions">
-                  ${u.role === "trainee"
-                    ? `<button class="icon-btn promote-btn" data-id="${u.id}">Promote to MI</button>`
-                    : `<button class="icon-btn demote-btn" data-id="${u.id}" ${isSelf ? "disabled title='Cannot demote yourself'" : ""}>Move to Trainee</button>`
-                  }
-                  <button class="icon-btn view-progress-btn" data-id="${u.id}">${u.role === "trainee" ? `View Checklist (${progressCount} mastered)` : "—"}</button>
-                </div>
+                <span class="online-dot ${online ? "online" : "offline"}" title="${online ? "Online now" : "Offline"}"></span>
+                <span style="font-size:11.5px; color:var(--ink-soft); margin-left:4px;">${online ? "Online" : "Offline"}</span>
+              </td>
+              <td>
+                <select class="status-select" data-id="${u.id}" ${isSelf ? "disabled title=\"You can't change your own status\"" : ""}>
+                  <option value="trainee" ${status === "trainee" ? "selected" : ""}>Trainee</option>
+                  <option value="senior" ${status === "senior" ? "selected" : ""}>Senior Member</option>
+                  <option value="mi" ${status === "mi" ? "selected" : ""}>Master of Initiation</option>
+                </select>
+              </td>
+              <td>
+                <button class="icon-btn view-progress-btn" data-id="${u.id}">${u.role === "trainee" ? `View Checklist (${progressCount} mastered)` : "—"}</button>
               </td>
             </tr>
-            <tr><td colspan="4" style="padding:0; border:none;">
+            <tr><td colspan="5" style="padding:0; border:none;">
               <div class="expand-panel ${openTraineeId === u.id ? "open" : ""}" id="expand-${u.id}"></div>
             </td></tr>`;
           }).join("")}
@@ -694,14 +792,16 @@ function renderTrainees(){
       </table>
     </div>`;
 
-  el.querySelectorAll(".promote-btn").forEach(b => b.addEventListener("click", (e) => {
+  el.querySelectorAll(".status-select").forEach(sel => sel.addEventListener("change", (e) => {
     e.stopPropagation();
-    if (confirm("Promote this trainee to Master of Initiation? They will gain full edit access to songs, schedule, and everyone's progress.")) setRole(b.dataset.id, "mi");
-  }));
-  el.querySelectorAll(".demote-btn").forEach(b => b.addEventListener("click", (e) => {
-    e.stopPropagation();
-    if (b.disabled) return;
-    if (confirm("Move this Master of Initiation back to trainee?")) setRole(b.dataset.id, "trainee");
+    const value = sel.value;
+    const label = value === "mi" ? "Master of Initiation" : value === "senior" ? "Senior Member" : "Trainee";
+    if (value === "mi" && !confirm("Promote this member to Master of Initiation? They will gain full edit access to songs, schedule, and everyone's progress.")){
+      sel.value = statusValue(users.find(u => u.id === sel.dataset.id));
+      return;
+    }
+    if (confirm(`Set this member's status to "${label}"?`)) setUserStatus(sel.dataset.id, value);
+    else sel.value = statusValue(users.find(u => u.id === sel.dataset.id));
   }));
   el.querySelectorAll(".view-progress-btn").forEach(b => b.addEventListener("click", (e) => {
     e.stopPropagation();
@@ -748,6 +848,97 @@ function renderTraineeChecklist(uid){
   panel.querySelectorAll(".stamp-btn").forEach(btn => {
     btn.addEventListener("click", () => setProgress(btn.dataset.uid, btn.dataset.a, btn.dataset.s, btn.dataset.status));
   });
+}
+
+// =====================================================================
+// TRAINEE VIEW (PREVIEW) — read-only mirror of trainee.html's own
+// dashboard, driven entirely by data MI can already see. Nothing here
+// writes anything or notifies the trainee being previewed in any way —
+// Firestore reads are never visible to the document's owner.
+// =====================================================================
+const previewSelect = document.getElementById("preview-select");
+previewSelect.addEventListener("change", () => { previewUid = previewSelect.value; renderPreview(); });
+
+function renderPreviewOptions(){
+  const trainees = users.filter(u => u.role === "trainee")
+    .sort((a,b) => {
+      const rankOrder = { "Senior Member": 0, "Trainee": 1 };
+      const diff = (rankOrder[a.rank] ?? 1) - (rankOrder[b.rank] ?? 1);
+      if (diff !== 0) return diff;
+      return (a.name||"").localeCompare(b.name||"");
+    });
+  const current = previewSelect.value;
+  previewSelect.innerHTML = `<option value="">— Select a trainee —</option>` +
+    trainees.map(u => `<option value="${u.id}">${escapeHtml(u.name)}${u.rank === "Senior Member" ? " (Senior Member)" : ""}</option>`).join("");
+  if (trainees.some(u => u.id === current)) previewSelect.value = current;
+  else if (trainees.some(u => u.id === previewUid)) previewSelect.value = previewUid;
+  previewUid = previewSelect.value;
+  renderPreview();
+}
+
+function renderPreview(){
+  const el = document.getElementById("preview-content");
+  if (!el) return;
+  if (!previewUid){
+    el.innerHTML = `<div class="empty">Pick a trainee above to see their dashboard exactly as they see it.</div>`;
+    return;
+  }
+  if (!assessments.length){
+    el.innerHTML = `<div class="empty">No assessments scheduled yet — this trainee's dashboard is currently empty.</div>`;
+    return;
+  }
+
+  let total = 0, mastered = 0, notyet = 0, pending = 0;
+  const cards = assessments.map(a => {
+    const songIds = a.songIds || [];
+    const rows = songIds.map(sid => {
+      const song = songsById[sid];
+      if (!song) return "";
+      total++;
+      const entry = progressAll.find(p => p.uid === previewUid && p.assessmentId === a.id && p.songId === sid);
+      const status = entry ? entry.status : "pending";
+      if (status === "mastered") mastered++;
+      else if (status === "not_mastered") notyet++;
+      else pending++;
+
+      const tag = status === "mastered"
+        ? `<span class="stamp-tag mastered">✓ Mastered</span>`
+        : status === "not_mastered"
+          ? `<span class="stamp-tag notyet">✕ Not Yet</span>`
+          : `<span class="stamp-tag pending">Unmarked</span>`;
+
+      return `
+        <div class="preview-song-row">
+          <div>
+            <div class="preview-song-title">${escapeHtml(song.title)}</div>
+            <div class="preview-song-meta">
+              <span class="cat-badge ${song.category}">${song.category}</span>
+              ${song.composer ? escapeHtml(song.composer) : ""}
+            </div>
+          </div>
+          ${tag}
+        </div>`;
+    }).join("");
+
+    return `
+      <div class="preview-assessment">
+        <div class="preview-assessment__head">
+          <h3>${escapeHtml(a.title || "Assessment")}</h3>
+          <div class="preview-assessment__date">${fmtDate(a.date)}</div>
+        </div>
+        ${a.notes ? `<div style="padding:0 18px; font-size:12px; color:var(--ink-soft); font-style:italic;">${escapeHtml(a.notes)}</div>` : ""}
+        <div style="padding:6px 0 10px;">${rows || '<div class="preview-song-row"><span class="preview-song-meta">No songs assigned to this assessment yet.</span></div>'}</div>
+      </div>`;
+  }).join("");
+
+  el.innerHTML = `
+    <div class="preview-stats">
+      <div class="preview-stat"><div class="num">${total}</div><div class="lbl">Assigned</div></div>
+      <div class="preview-stat mastered"><div class="num">${mastered}</div><div class="lbl">Mastered</div></div>
+      <div class="preview-stat notyet"><div class="num">${notyet}</div><div class="lbl">Not Yet</div></div>
+      <div class="preview-stat pending"><div class="num">${pending}</div><div class="lbl">Unmarked</div></div>
+    </div>
+    ${cards}`;
 }
 
 // =====================================================================
