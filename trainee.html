@@ -128,6 +128,35 @@
     margin:0 0 12px;
   }
 
+  .card{
+    background:#fff;
+    border:1px solid var(--parchment-deep);
+    border-radius:var(--radius);
+    margin-bottom:28px;
+    overflow:hidden;
+  }
+  .members-card{ max-height:280px; overflow-y:auto; }
+  .member-row{
+    display:flex; align-items:center; gap:10px;
+    padding:10px 18px;
+    border-bottom:1px solid var(--parchment-deep);
+    font-size:13.5px;
+  }
+  .member-row:last-child{ border-bottom:none; }
+  .member-name{ flex:1; font-weight:600; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .online-dot{
+    width:9px; height:9px; border-radius:50%; flex-shrink:0;
+  }
+  .online-dot.online{ background:var(--success); box-shadow:0 0 0 3px rgba(60,122,92,0.18); }
+  .online-dot.offline{ background:#C9BFA9; }
+  .rank-badge{
+    font-size:9.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.4px;
+    padding:3px 9px; border-radius:999px; flex-shrink:0;
+  }
+  .rank-badge.mi{ background:var(--gold); color:var(--crimson); }
+  .rank-badge.senior{ background:#E9E4F5; color:#5A3FA0; }
+  .rank-badge.trainee{ background:var(--parchment-deep); color:var(--ink-soft); }
+
   .assessment{
     background:#fff;
     border:1px solid var(--parchment-deep);
@@ -274,6 +303,11 @@
     <div class="stat pending"><div class="num" id="stat-pending">0</div><div class="lbl">Unmarked</div></div>
   </div>
 
+  <h2 class="section-title">Choir Members</h2>
+  <div class="card members-card">
+    <div id="members-list" class="loading" style="padding:24px;">Loading roster…</div>
+  </div>
+
   <h2 class="section-title">Your Assessment Schedule</h2>
   <div id="assessment-list" class="loading">Loading your schedule…</div>
 </main>
@@ -282,7 +316,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 import {
-  getFirestore, doc, getDoc, setDoc, collection, getDocs, query, orderBy, where,
+  getFirestore, doc, getDoc, setDoc, updateDoc, collection, getDocs, query, orderBy, where,
   onSnapshot, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 import { firebaseConfig } from "./js/firebase-config.js";
@@ -295,8 +329,11 @@ let currentUser = null;
 let songsById = {};        // songId -> song data
 let assessments = [];      // all assessment docs, sorted by date
 let progressByKey = {};    // `${assessmentId}_${songId}` -> "mastered" | "not_mastered"
+let members = [];          // every user account, for the "who's here" roster
 
 const listEl = document.getElementById("assessment-list");
+const membersEl = document.getElementById("members-list");
+const ONLINE_WINDOW_MS = 90 * 1000; // heartbeats every 25s, so 90s covers a couple of missed beats
 
 // ---- Auth gate: trainees only. MIs get bounced to their own dashboard. ----
 onAuthStateChanged(auth, async (user) => {
@@ -311,9 +348,71 @@ onAuthStateChanged(auth, async (user) => {
   await loadSongs();
   listenAssessments();
   listenProgress();
+  listenMembers();
+  startHeartbeat();
 });
 
 document.getElementById("signout-btn").addEventListener("click", () => signOut(auth));
+
+// ---- Presence: a lightweight "I'm still here" ping every 25s. Anyone
+// viewing the member list computes online/offline from how recent this
+// timestamp is — there's no separate "online" flag to keep in sync. ----
+function startHeartbeat(){
+  const beat = () => updateDoc(doc(db, "users", currentUser.uid), { lastActive: serverTimestamp() }).catch(() => {});
+  beat();
+  setInterval(beat, 25000);
+}
+
+function listenMembers(){
+  onSnapshot(collection(db, "users"), (snap) => {
+    members = [];
+    snap.forEach(d => members.push({ id: d.id, ...d.data() }));
+    renderMembers();
+  }, (err) => console.error("members listener error:", err));
+  // Recompute online/offline every 20s even without new snapshot data,
+  // since "online" is purely a function of how stale lastActive is.
+  setInterval(renderMembers, 20000);
+}
+
+function isOnline(u){
+  const ts = u.lastActive;
+  if (!ts || typeof ts.toMillis !== "function") return false;
+  return (Date.now() - ts.toMillis()) < ONLINE_WINDOW_MS;
+}
+
+function rankLabel(u){
+  if (u.role === "mi") return "Master of Initiation";
+  if (u.rank === "Senior Member") return "Senior Member";
+  return "Trainee";
+}
+function rankClass(u){
+  if (u.role === "mi") return "mi";
+  if (u.rank === "Senior Member") return "senior";
+  return "trainee";
+}
+
+function renderMembers(){
+  if (!membersEl) return;
+  if (!members.length){
+    membersEl.innerHTML = `<div class="empty" style="padding:24px;">No members yet.</div>`;
+    return;
+  }
+  const sorted = [...members].sort((a, b) => {
+    const rankOrder = { mi: 0, senior: 1, trainee: 2 };
+    const diff = rankOrder[rankClass(a)] - rankOrder[rankClass(b)];
+    if (diff !== 0) return diff;
+    return (a.name || "").localeCompare(b.name || "");
+  });
+  membersEl.innerHTML = sorted.map(u => {
+    const online = isOnline(u);
+    return `
+      <div class="member-row">
+        <span class="online-dot ${online ? "online" : "offline"}" title="${online ? "Online now" : "Offline"}"></span>
+        <span class="member-name">${escapeHtml(u.name)}${u.id === currentUser.uid ? " (You)" : ""}</span>
+        <span class="rank-badge ${rankClass(u)}">${rankLabel(u)}</span>
+      </div>`;
+  }).join("");
+}
 
 async function loadSongs(){
   const snap = await getDocs(collection(db, "songs"));
