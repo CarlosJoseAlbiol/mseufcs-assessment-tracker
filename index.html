@@ -286,7 +286,7 @@ function showInfo(text){
 onAuthStateChanged(auth, async (user) => {
   if (!user) return;
   const profile = await ensureProfile(user);
-  window.location.href = profile.role === "mi" ? "mi.html" : "trainee.html";
+  window.location.href = (profile.role === "mi" || profile.role === "senior") ? "mi.html" : "trainee.html";
 });
 
 async function ensureProfile(user, name){
@@ -297,7 +297,6 @@ async function ensureProfile(user, name){
       name: name || user.email.split("@")[0],
       email: user.email,
       role: "trainee",
-      rank: "Trainee",
       voicePart: "",
       lastActive: serverTimestamp(),
       createdAt: serverTimestamp()
