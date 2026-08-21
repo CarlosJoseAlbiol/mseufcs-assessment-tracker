@@ -303,7 +303,7 @@
     <div class="stat pending"><div class="num" id="stat-pending">0</div><div class="lbl">Unmarked</div></div>
   </div>
 
-  <h2 class="section-title">Trainees List</h2>
+  <h2 class="section-title">Trainees</h2>
   <div class="card members-card">
     <div id="members-list" class="loading" style="padding:24px;">Loading roster…</div>
   </div>
@@ -335,13 +335,13 @@ const listEl = document.getElementById("assessment-list");
 const membersEl = document.getElementById("members-list");
 const ONLINE_WINDOW_MS = 90 * 1000; // heartbeats every 25s, so 90s covers a couple of missed beats
 
-// ---- Auth gate: trainees only. MIs get bounced to their own dashboard. ----
+// ---- Auth gate: trainees only. Staff (Senior Member or MI) get bounced to their own dashboard. ----
 onAuthStateChanged(auth, async (user) => {
   if (!user){ window.location.href = "index.html"; return; }
   const profSnap = await getDoc(doc(db, "users", user.uid));
   const profile = profSnap.exists() ? profSnap.data() : null;
   if (!profile){ window.location.href = "index.html"; return; }
-  if (profile.role === "mi"){ window.location.href = "mi.html"; return; }
+  if (profile.role === "mi" || profile.role === "senior"){ window.location.href = "mi.html"; return; }
 
   currentUser = user;
   document.getElementById("who-name").textContent = profile.name || user.email;
@@ -364,7 +364,9 @@ function startHeartbeat(){
 }
 
 function listenMembers(){
-  onSnapshot(collection(db, "users"), (snap) => {
+  // Only fellow trainees show up here — Senior Members and MIs have
+  // their own separate roster on the staff dashboard.
+  onSnapshot(query(collection(db, "users"), where("role", "==", "trainee")), (snap) => {
     members = [];
     snap.forEach(d => members.push({ id: d.id, ...d.data() }));
     renderMembers();
@@ -380,36 +382,19 @@ function isOnline(u){
   return (Date.now() - ts.toMillis()) < ONLINE_WINDOW_MS;
 }
 
-function rankLabel(u){
-  if (u.role === "mi") return "Master of Initiation";
-  if (u.rank === "Senior Member") return "Senior Member";
-  return "Trainee";
-}
-function rankClass(u){
-  if (u.role === "mi") return "mi";
-  if (u.rank === "Senior Member") return "senior";
-  return "trainee";
-}
-
 function renderMembers(){
   if (!membersEl) return;
   if (!members.length){
-    membersEl.innerHTML = `<div class="empty" style="padding:24px;">No members yet.</div>`;
+    membersEl.innerHTML = `<div class="empty" style="padding:24px;">No other trainees yet.</div>`;
     return;
   }
-  const sorted = [...members].sort((a, b) => {
-    const rankOrder = { mi: 0, senior: 1, trainee: 2 };
-    const diff = rankOrder[rankClass(a)] - rankOrder[rankClass(b)];
-    if (diff !== 0) return diff;
-    return (a.name || "").localeCompare(b.name || "");
-  });
+  const sorted = [...members].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
   membersEl.innerHTML = sorted.map(u => {
     const online = isOnline(u);
     return `
       <div class="member-row">
         <span class="online-dot ${online ? "online" : "offline"}" title="${online ? "Online now" : "Offline"}"></span>
         <span class="member-name">${escapeHtml(u.name)}${u.id === currentUser.uid ? " (You)" : ""}</span>
-        <span class="rank-badge ${rankClass(u)}">${rankLabel(u)}</span>
       </div>`;
   }).join("");
 }
