@@ -273,12 +273,12 @@
     <div class="seal"><img src="img/logo.jpg" alt="MSEUF Concert Singers"></div>
     <div>
       <h1>MSEUF Concert Singers</h1>
-      <p>Master of Initiation and Members Dashboard</p>
+      <p id="dashboard-subtitle">Staff Dashboard</p>
     </div>
   </div>
   <div class="who">
     <div class="name" id="who-name">—</div>
-    <span class="badge">Master of Initiation</span>
+    <span class="badge" id="who-badge">Staff</span>
     <button id="signout-btn">Sign Out</button>
   </div>
 </header>
@@ -345,7 +345,7 @@
   <!-- ============ TRAINEES TAB ============ -->
   <section id="panel-trainees" class="panel">
     <div class="toolbar">
-      <h2>Members &amp; Trainees</h2>
+      <h2>Members &amp; Progress</h2>
     </div>
     <div id="trainees-list" class="loading">Loading roster…</div>
   </section>
@@ -395,16 +395,19 @@ let openTraineeId = null;
 let previewUid = "";        // which trainee is currently shown in the Trainee View tab
 const ONLINE_WINDOW_MS = 90 * 1000; // heartbeats every 25s, so 90s covers a couple of missed beats
 
-// ---- Auth gate: MI only. Trainees get bounced to their own dashboard. ----
+// ---- Auth gate: staff (Senior Member or MI) only. Trainees get bounced to their own dashboard. ----
 onAuthStateChanged(auth, async (user) => {
   if (!user){ window.location.href = "index.html"; return; }
   const profSnap = await getDoc(doc(db, "users", user.uid));
   const profile = profSnap.exists() ? profSnap.data() : null;
   if (!profile){ window.location.href = "index.html"; return; }
-  if (profile.role !== "mi"){ window.location.href = "trainee.html"; return; }
+  if (profile.role !== "mi" && profile.role !== "senior"){ window.location.href = "trainee.html"; return; }
 
   currentUser = user;
   document.getElementById("who-name").textContent = profile.name || user.email;
+  const isMI = profile.role === "mi";
+  document.getElementById("who-badge").textContent = isMI ? "Master of Initiation" : "Senior Member";
+  document.getElementById("dashboard-subtitle").textContent = isMI ? "Master of Initiation Dashboard" : "Senior Member Dashboard";
   listenSongs();
   listenAssessments();
   listenProgress();
@@ -430,14 +433,15 @@ function isOnline(u){
   return (Date.now() - ts.toMillis()) < ONLINE_WINDOW_MS;
 }
 
+// "role" alone now decides status — trainee, senior (Senior Member), or
+// mi (Master of Initiation). Senior and MI share identical permissions;
+// only the label shown here differs.
 function statusValue(u){
-  if (u.role === "mi") return "mi";
-  if (u.rank === "Senior Member") return "senior";
-  return "trainee";
+  return u.role === "mi" ? "mi" : u.role === "senior" ? "senior" : "trainee";
 }
 function statusLabel(u){
   if (u.role === "mi") return "Master of Initiation";
-  if (u.rank === "Senior Member") return "Senior Member";
+  if (u.role === "senior") return "Senior Member";
   return "Trainee";
 }
 
@@ -735,10 +739,10 @@ async function setUserStatus(uid, value){
     await updateDoc(doc(db, "users", uid), { role: "mi" });
     toast("Promoted to Master of Initiation.");
   } else if (value === "senior"){
-    await updateDoc(doc(db, "users", uid), { role: "trainee", rank: "Senior Member" });
-    toast("Marked as Senior Member.");
+    await updateDoc(doc(db, "users", uid), { role: "senior" });
+    toast("Promoted to Senior Member — full edit access granted.");
   } else {
-    await updateDoc(doc(db, "users", uid), { role: "trainee", rank: "Trainee" });
+    await updateDoc(doc(db, "users", uid), { role: "trainee" });
     toast("Set as Trainee.");
   }
 }
@@ -796,12 +800,15 @@ function renderTrainees(){
     e.stopPropagation();
     const value = sel.value;
     const label = value === "mi" ? "Master of Initiation" : value === "senior" ? "Senior Member" : "Trainee";
-    if (value === "mi" && !confirm("Promote this member to Master of Initiation? They will gain full edit access to songs, schedule, and everyone's progress.")){
+    if ((value === "mi" || value === "senior") && !confirm(`Set this member's status to "${label}"? They will gain full edit access to songs, schedule, and everyone's progress — the same access as any other staff member.`)){
       sel.value = statusValue(users.find(u => u.id === sel.dataset.id));
       return;
     }
-    if (confirm(`Set this member's status to "${label}"?`)) setUserStatus(sel.dataset.id, value);
-    else sel.value = statusValue(users.find(u => u.id === sel.dataset.id));
+    if (value === "trainee" && !confirm(`Set this member's status to "Trainee"? They will lose edit access to songs, schedule, and other trainees' progress.`)){
+      sel.value = statusValue(users.find(u => u.id === sel.dataset.id));
+      return;
+    }
+    setUserStatus(sel.dataset.id, value);
   }));
   el.querySelectorAll(".view-progress-btn").forEach(b => b.addEventListener("click", (e) => {
     e.stopPropagation();
@@ -861,15 +868,10 @@ previewSelect.addEventListener("change", () => { previewUid = previewSelect.valu
 
 function renderPreviewOptions(){
   const trainees = users.filter(u => u.role === "trainee")
-    .sort((a,b) => {
-      const rankOrder = { "Senior Member": 0, "Trainee": 1 };
-      const diff = (rankOrder[a.rank] ?? 1) - (rankOrder[b.rank] ?? 1);
-      if (diff !== 0) return diff;
-      return (a.name||"").localeCompare(b.name||"");
-    });
+    .sort((a,b) => (a.name||"").localeCompare(b.name||""));
   const current = previewSelect.value;
   previewSelect.innerHTML = `<option value="">— Select a trainee —</option>` +
-    trainees.map(u => `<option value="${u.id}">${escapeHtml(u.name)}${u.rank === "Senior Member" ? " (Senior Member)" : ""}</option>`).join("");
+    trainees.map(u => `<option value="${u.id}">${escapeHtml(u.name)}</option>`).join("");
   if (trainees.some(u => u.id === current)) previewSelect.value = current;
   else if (trainees.some(u => u.id === previewUid)) previewSelect.value = previewUid;
   previewUid = previewSelect.value;
