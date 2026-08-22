@@ -158,6 +158,7 @@
   .cat-Medium h4, .tag-Medium{ color:#8A6A11; }
   .cat-Hard h4, .tag-Hard{ color:var(--danger); }
   .cat-Intermediate h4, .tag-Intermediate{ color:#5A3FA0; }
+  .cat-Uncategorized h4, .tag-Uncategorized{ color:var(--ink-soft); }
 
   table{ width:100%; border-collapse:collapse; font-size:13.5px; }
   th{ text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:0.3px; color:var(--ink-soft); padding:8px 10px; border-bottom:2px solid var(--parchment-deep); }
@@ -171,6 +172,7 @@
   .cat-badge.Medium{ background:#FBF1DA; color:#8A6A11; }
   .cat-badge.Hard{ background:#FBEAE7; color:var(--danger); }
   .cat-badge.Intermediate{ background:#E9E4F5; color:#5A3FA0; }
+  .cat-badge.Uncategorized{ background:var(--parchment-deep); color:var(--ink-soft); }
   .row-actions{ display:flex; gap:6px; }
   .icon-btn{
     border:none; background:var(--parchment-deep); border-radius:6px; padding:5px 9px; cursor:pointer; font-size:12px;
@@ -307,7 +309,7 @@
         <div class="field">
           <label for="song-category">Difficulty</label>
           <select id="song-category">
-            <option>Easy</option><option>Medium</option><option>Hard</option><option>Intermediate</option>
+            <option>Easy</option><option>Medium</option><option>Hard</option><option>Intermediate</option><option>Uncategorized</option>
           </select>
         </div>
         <div class="field"><button class="btn btn-primary" id="add-song-btn">Add Song</button></div>
@@ -508,20 +510,21 @@ function renderSongs(){
     el.innerHTML = `<div class="empty">No songs yet. Add one above, or load the master repertoire.</div>`;
     return;
   }
-  const cats = ["Easy","Medium","Hard","Intermediate"];
+  const cats = ["Easy","Medium","Hard","Intermediate","Uncategorized"];
   el.innerHTML = cats.map(cat => {
     const list = songs.filter(s => s.category === cat);
     if (!list.length) return "";
     return `
       <div class="card cat-${cat}">
-        <h3>${cat} <span style="color:var(--ink-soft); font-weight:500; font-size:12px;">(${list.length})</span></h3>
+        <h3>${cat === "Uncategorized" ? "Uncategorized (not yet assigned a difficulty)" : cat} <span style="color:var(--ink-soft); font-weight:500; font-size:12px;">(${list.length})</span></h3>
         <table>
-          <thead><tr><th>Title</th><th>Composer / Arranger</th><th></th></tr></thead>
+          <thead><tr><th>Title</th><th>Composer / Arranger</th><th>Difficulty</th><th></th></tr></thead>
           <tbody>
             ${list.map(s => `
               <tr data-id="${s.id}">
                 <td class="cell-title">${escapeHtml(s.title)}</td>
                 <td class="cell-composer">${escapeHtml(s.composer) || "—"}</td>
+                <td class="cell-category"><span class="cat-badge ${s.category}">${s.category}</span></td>
                 <td>
                   <div class="row-actions">
                     <button class="icon-btn edit-song" data-id="${s.id}">Edit</button>
@@ -545,12 +548,17 @@ function renderSongs(){
     const song = songsById[b.dataset.id];
     row.querySelector(".cell-title").innerHTML = `<input class="edit-title" value="${escapeHtml(song.title)}">`;
     row.querySelector(".cell-composer").innerHTML = `<input class="edit-composer" value="${escapeHtml(song.composer)}">`;
+    row.querySelector(".cell-category").innerHTML = `
+      <select class="edit-category">
+        ${["Easy","Medium","Hard","Intermediate","Uncategorized"].map(c => `<option value="${c}" ${c === song.category ? "selected" : ""}>${c}</option>`).join("")}
+      </select>`;
     b.textContent = "Save";
     b.classList.remove("edit-song");
     b.addEventListener("click", async () => {
       const title = row.querySelector(".edit-title").value.trim();
       const composer = row.querySelector(".edit-composer").value.trim();
-      await updateDoc(doc(db, "songs", song.id), { title, composer });
+      const category = row.querySelector(".edit-category").value;
+      await updateDoc(doc(db, "songs", song.id), { title, composer, category });
       toast("Song updated.");
     }, { once: true });
   }));
@@ -574,13 +582,13 @@ document.getElementById("seed-songs-btn").addEventListener("click", async () => 
 // =====================================================================
 function renderSongCheckboxes(){
   const el = document.getElementById("song-checkboxes");
-  const cats = ["Easy","Medium","Hard","Intermediate"];
+  const cats = ["Easy","Medium","Hard","Intermediate","Uncategorized"];
   el.innerHTML = cats.map(cat => {
     const list = songs.filter(s => s.category === cat);
     if (!list.length) return "";
     return `
       <div class="cat-group cat-${cat}">
-        <h4>${cat}</h4>
+        <h4>${cat === "Uncategorized" ? "Uncategorized" : cat}</h4>
         <div class="checkbox-grid">
           ${list.map(s => `
             <label class="checkbox-row">
@@ -914,7 +922,7 @@ function renderPreview(){
           <div>
             <div class="preview-song-title">${escapeHtml(song.title)}</div>
             <div class="preview-song-meta">
-              <span class="cat-badge ${song.category}">${song.category}</span>
+              ${song.category === "Uncategorized" ? "" : `<span class="cat-badge ${song.category}">${song.category}</span>`}
               ${song.composer ? escapeHtml(song.composer) : ""}
             </div>
           </div>
