@@ -142,6 +142,7 @@
   .card h3{ margin:0 0 14px; font-family:'Fraunces',serif; font-size:15px; font-weight:600; }
 
   .form-grid{ display:grid; grid-template-columns:1.4fr 1fr 0.9fr auto; gap:10px; align-items:end; }
+  .form-grid--3col{ grid-template-columns:1.4fr 1fr auto; }
   .field label{ display:block; font-size:11px; font-weight:600; color:var(--ink-soft); margin-bottom:5px; text-transform:uppercase; letter-spacing:0.3px; }
   input,select,textarea{
     width:100%; padding:9px 11px; border-radius:8px; border:1.5px solid var(--parchment-deep);
@@ -161,6 +162,8 @@
   .cat-Uncategorized h4, .tag-Uncategorized{ color:var(--ink-soft); }
 
   table{ width:100%; border-collapse:collapse; font-size:13.5px; }
+  .table-scroll{ overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  .table-scroll table{ min-width:520px; }
   th{ text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:0.3px; color:var(--ink-soft); padding:8px 10px; border-bottom:2px solid var(--parchment-deep); }
   td{ padding:9px 10px; border-bottom:1px solid var(--parchment-deep); vertical-align:middle; }
   tr:last-child td{ border-bottom:none; }
@@ -261,7 +264,24 @@
   :focus-visible{ outline:2px solid var(--gold); outline-offset:2px; }
   @media (max-width:700px){
     .form-grid{ grid-template-columns:1fr; }
+    .form-grid--3col{ grid-template-columns:1fr; }
     nav.tabs{ overflow-x:auto; }
+    header{ padding:14px 16px; flex-wrap:wrap; gap:10px; }
+    header h1{ font-size:15.5px; }
+    header p{ font-size:11px; }
+    header .who{ text-align:left; }
+    header .who button{ margin-left:0; }
+    main{ padding:16px 14px 70px; }
+    .card{ padding:14px 16px; }
+    .toolbar{ align-items:flex-start; }
+    .toolbar h2{ font-size:17px; }
+    .preview-stats{ grid-template-columns:repeat(2,1fr); }
+    .checkbox-grid{ grid-template-columns:1fr; }
+    .assessment-card__head{ flex-direction:column; align-items:flex-start; gap:4px; }
+    .preview-assessment__head{ flex-direction:column; align-items:flex-start; gap:4px; }
+    .preview-song-row{ flex-wrap:wrap; }
+    .mini-song-row{ flex-wrap:wrap; gap:6px; }
+    .status-select{ min-width:140px; }
   }
   @media (prefers-reduced-motion: reduce){ *{transition:none !important;} }
 </style>
@@ -329,7 +349,7 @@
     <div class="card">
       <h3 id="assessment-form-title">Add an Assessment</h3>
       <input type="hidden" id="assessment-edit-id">
-      <div class="form-grid" style="grid-template-columns:1.4fr 1fr auto;">
+      <div class="form-grid form-grid--3col">
         <div class="field"><label for="assessment-title">Title</label><input id="assessment-title" placeholder="e.g. September Assessment 1"></div>
         <div class="field"><label for="assessment-date">Date</label><input type="date" id="assessment-date"></div>
         <div class="field"><button class="btn btn-primary" id="save-assessment-btn">Add Assessment</button></div>
@@ -517,6 +537,7 @@ function renderSongs(){
     return `
       <div class="card cat-${cat}">
         <h3>${cat === "Uncategorized" ? "Uncategorized (not yet assigned a difficulty)" : cat} <span style="color:var(--ink-soft); font-weight:500; font-size:12px;">(${list.length})</span></h3>
+        <div class="table-scroll">
         <table>
           <thead><tr><th>Title</th><th>Composer / Arranger</th><th>Difficulty</th><th></th></tr></thead>
           <tbody>
@@ -534,6 +555,7 @@ function renderSongs(){
               </tr>`).join("")}
           </tbody>
         </table>
+        </div>
       </div>`;
   }).join("");
 
@@ -584,11 +606,16 @@ function renderSongCheckboxes(){
   const el = document.getElementById("song-checkboxes");
   const cats = ["Easy","Medium","Hard","Intermediate","Uncategorized"];
   el.innerHTML = cats.map(cat => {
-    const list = songs.filter(s => s.category === cat);
+    // "Uncategorized" here doubles as a full song pool — every song shows
+    // up there too, not just ones literally tagged Uncategorized. That way
+    // an assessment can be built entirely from this section without ever
+    // touching the difficulty-labeled groups, so nothing about which
+    // songs are Easy/Medium/Hard/Intermediate leaks while scheduling.
+    const list = cat === "Uncategorized" ? songs : songs.filter(s => s.category === cat);
     if (!list.length) return "";
     return `
       <div class="cat-group cat-${cat}">
-        <h4>${cat === "Uncategorized" ? "Uncategorized" : cat}</h4>
+        <h4>${cat === "Uncategorized" ? "Uncategorized (every song, regardless of difficulty)" : cat}</h4>
         <div class="checkbox-grid">
           ${list.map(s => `
             <label class="checkbox-row">
@@ -599,8 +626,12 @@ function renderSongCheckboxes(){
       </div>`;
   }).join("") || `<p style="color:var(--ink-soft); font-size:13px;">Add songs to the repertoire first.</p>`;
 
+  // A song can now appear as two checkboxes (its real category + the
+  // Uncategorized pool) — keep every checkbox for the same song in sync
+  // when either one is toggled, so they never show conflicting states.
   el.querySelectorAll(".song-check").forEach(cb => cb.addEventListener("change", () => {
     if (cb.checked) selectedSongIds.add(cb.value); else selectedSongIds.delete(cb.value);
+    el.querySelectorAll(`.song-check[value="${cb.value}"]`).forEach(other => { other.checked = cb.checked; });
   }));
 }
 
@@ -767,12 +798,19 @@ function renderTrainees(){
   const el = document.getElementById("trainees-list");
   if (!users.length){ el.innerHTML = `<div class="empty">No accounts yet.</div>`; return; }
 
-  el.innerHTML = `
-    <div class="card">
+  const staff = users.filter(u => u.role === "mi" || u.role === "senior")
+    .sort((a,b) => (a.role === b.role ? 0 : a.role === "mi" ? -1 : 1) || (a.name||"").localeCompare(b.name||""));
+  const traineesOnly = users.filter(u => u.role === "trainee")
+    .sort((a,b) => (a.name||"").localeCompare(b.name||""));
+
+  function renderGroupTable(list){
+    if (!list.length) return `<div class="empty">No one here yet.</div>`;
+    return `
+      <div class="table-scroll">
       <table>
         <thead><tr><th>Name</th><th>Email</th><th>Online</th><th>Status</th><th></th></tr></thead>
         <tbody>
-          ${users.map(u => {
+          ${list.map(u => {
             const isSelf = u.id === currentUser.uid;
             const progressCount = progressAll.filter(p => p.uid === u.id && p.status === "mastered").length;
             const online = isOnline(u);
@@ -802,6 +840,17 @@ function renderTrainees(){
           }).join("")}
         </tbody>
       </table>
+      </div>`;
+  }
+
+  el.innerHTML = `
+    <div class="card">
+      <h3>Staff <span style="color:var(--ink-soft); font-weight:500; font-size:12px;">Senior Members &amp; Masters of Initiation (${staff.length})</span></h3>
+      ${renderGroupTable(staff)}
+    </div>
+    <div class="card">
+      <h3>Trainees <span style="color:var(--ink-soft); font-weight:500; font-size:12px;">(${traineesOnly.length})</span></h3>
+      ${renderGroupTable(traineesOnly)}
     </div>`;
 
   el.querySelectorAll(".status-select").forEach(sel => sel.addEventListener("change", (e) => {
