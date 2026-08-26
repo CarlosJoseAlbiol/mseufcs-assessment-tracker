@@ -244,6 +244,10 @@
   .preview-song-row:last-child{ border-bottom:none; }
   .preview-song-title{ font-weight:600; font-size:13.5px; }
   .preview-song-meta{ font-size:11.5px; color:var(--ink-soft); margin-top:1px; }
+  .song-files{ margin-top:6px; display:flex; flex-direction:column; gap:3px; }
+  .song-file-link{ font-size:11.5px; color:var(--crimson); font-weight:600; text-decoration:none; }
+  .song-file-link:hover{ text-decoration:underline; }
+  .song-file-link span{ color:var(--ink-soft); font-weight:400; }
   .stamp-tag{
     font-family:'Fraunces',serif; font-weight:700; font-size:10px; letter-spacing:0.7px; text-transform:uppercase;
     padding:4px 9px; border-radius:6px; border:1.5px solid transparent; white-space:nowrap;
@@ -320,6 +324,9 @@
       <h2>Song Repertoire</h2>
       <button class="btn btn-gold" id="seed-songs-btn">Load Master Repertoire (57 songs)</button>
     </div>
+    <p style="font-size:12px; color:var(--ink-soft); margin:-8px 0 16px;">
+      Click "Files" on any song to attach sheet music, MIDI files, or recordings — trainees can view and download them, but never upload or delete. Max 25MB per file.
+    </p>
 
     <div class="card">
       <h3>Add a Song</h3>
@@ -400,11 +407,15 @@ import {
   getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc,
   collection, getDocs, query, orderBy, onSnapshot, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+import {
+  getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-storage.js";
 import { firebaseConfig } from "./js/firebase-config.js";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+const storage = getStorage(app);
 
 let currentUser = null;
 let songs = [];             // [{id, title, composer, category}]
@@ -415,6 +426,8 @@ let users = [];             // [{id, name, email, role, rank, voicePart, lastAct
 let selectedSongIds = new Set(); // for the assessment form's checkbox picker
 let openTraineeId = null;
 let previewUid = "";        // which trainee is currently shown in the Trainee View tab
+let openSongFilesId = null; // which song's file panel is currently expanded
+let songFilesCache = {};    // songId -> [{id, name, url, path, size, uploadedAt}]
 const ONLINE_WINDOW_MS = 90 * 1000; // heartbeats every 25s, so 90s covers a couple of missed beats
 
 // ---- Auth gate: staff (Senior Member or MI) only. Trainees get bounced to their own dashboard. ----
@@ -539,20 +552,24 @@ function renderSongs(){
         <h3>${cat === "Uncategorized" ? "Uncategorized (not yet assigned a difficulty)" : cat} <span style="color:var(--ink-soft); font-weight:500; font-size:12px;">(${list.length})</span></h3>
         <div class="table-scroll">
         <table>
-          <thead><tr><th>Title</th><th>Composer / Arranger</th><th>Difficulty</th><th></th></tr></thead>
+          <thead><tr><th>Title</th><th>Composer / Arranger</th><th>Difficulty</th><th>Files</th><th></th></tr></thead>
           <tbody>
             ${list.map(s => `
               <tr data-id="${s.id}">
                 <td class="cell-title">${escapeHtml(s.title)}</td>
                 <td class="cell-composer">${escapeHtml(s.composer) || "—"}</td>
                 <td class="cell-category"><span class="cat-badge ${s.category}">${s.category}</span></td>
+                <td><button class="icon-btn files-btn" data-id="${s.id}">${songFilesCache[s.id] ? `Files (${songFilesCache[s.id].length})` : "Files"}</button></td>
                 <td>
                   <div class="row-actions">
                     <button class="icon-btn edit-song" data-id="${s.id}">Edit</button>
                     <button class="icon-btn danger del-song" data-id="${s.id}">Delete</button>
                   </div>
                 </td>
-              </tr>`).join("")}
+              </tr>
+              <tr><td colspan="5" style="padding:0; border:none;">
+                <div class="expand-panel ${openSongFilesId === s.id ? "open" : ""}" id="files-panel-${s.id}"></div>
+              </td></tr>`).join("")}
           </tbody>
         </table>
         </div>
@@ -584,6 +601,126 @@ function renderSongs(){
       toast("Song updated.");
     }, { once: true });
   }));
+
+  el.querySelectorAll(".files-btn").forEach(b => b.addEventListener("click", async () => {
+    const songId = b.dataset.id;
+    openSongFilesId = openSongFilesId === songId ? null : songId;
+    renderSongs();
+    if (openSongFilesId) await openSongFiles(songId);
+  }));
+}
+
+// =====================================================================
+// SONG FILES — sheet music, MIDI, recordings, etc. attached per song.
+// Metadata lives in Firestore (songs/{songId}/files/{fileId}); the
+// actual bytes live in Firebase Storage under song-files/{songId}/,
+// so each song effectively gets its own folder there.
+// =====================================================================
+const MAX_FILE_MB = 25;
+
+async function openSongFiles(songId){
+  const panel = document.getElementById("files-panel-" + songId);
+  if (!panel) return;
+  panel.classList.add("open");
+  panel.innerHTML = `<p style="color:var(--ink-soft); font-size:13px;">Loading files…</p>`;
+  await loadSongFiles(songId);
+  renderSongFilesPanel(songId);
+}
+
+async function loadSongFiles(songId){
+  const snap = await getDocs(query(collection(db, "songs", songId, "files"), orderBy("uploadedAt", "asc")));
+  const list = [];
+  snap.forEach(d => list.push({ id: d.id, ...d.data() }));
+  songFilesCache[songId] = list;
+}
+
+function formatFileSize(bytes){
+  if (!bytes && bytes !== 0) return "";
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + " KB";
+  return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+}
+
+function renderSongFilesPanel(songId){
+  const panel = document.getElementById("files-panel-" + songId);
+  if (!panel) return;
+  const files = songFilesCache[songId] || [];
+  panel.innerHTML = `
+    <div style="margin-bottom:12px;">
+      ${files.length ? files.map(f => `
+        <div class="mini-song-row">
+          <span>📄 <a href="${f.url}" target="_blank" rel="noopener" style="color:var(--crimson); font-weight:600;">${escapeHtml(f.name)}</a>
+            <span style="color:var(--ink-soft); font-size:11.5px;"> (${formatFileSize(f.size)})</span>
+          </span>
+          <button class="icon-btn danger del-file-btn" data-song="${songId}" data-file="${f.id}" data-path="${escapeHtml(f.path)}">Delete</button>
+        </div>`).join("") : `<p style="color:var(--ink-soft); font-size:13px; margin:0 0 8px;">No files uploaded yet for this song.</p>`}
+    </div>
+    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+      <input type="file" class="song-file-input" data-song="${songId}" style="flex:1; min-width:180px;">
+      <button class="btn btn-primary btn-sm upload-file-btn" data-song="${songId}">Upload</button>
+    </div>
+    <p class="upload-status" data-song="${songId}" style="font-size:11.5px; color:var(--ink-soft); margin:6px 0 0;"></p>`;
+
+  panel.querySelectorAll(".del-file-btn").forEach(b => b.addEventListener("click", async () => {
+    if (!confirm(`Delete "${b.closest(".mini-song-row").querySelector("a").textContent}"? This can't be undone.`)) return;
+    await deleteSongFile(b.dataset.song, b.dataset.file, b.dataset.path);
+  }));
+
+  panel.querySelector(".upload-file-btn").addEventListener("click", async () => {
+    const input = panel.querySelector(".song-file-input");
+    const file = input.files[0];
+    const statusEl = panel.querySelector(".upload-status");
+    if (!file){ statusEl.textContent = "Choose a file first."; return; }
+    if (file.size > MAX_FILE_MB * 1024 * 1024){
+      statusEl.textContent = `That file is over ${MAX_FILE_MB}MB — pick a smaller one.`;
+      return;
+    }
+    await uploadSongFile(songId, file, statusEl);
+  });
+}
+
+async function uploadSongFile(songId, file, statusEl){
+  const fileId = crypto.randomUUID();
+  const path = `song-files/${songId}/${fileId}_${file.name}`;
+  const storageRef = ref(storage, path);
+  const task = uploadBytesResumable(storageRef, file);
+
+  await new Promise((resolve, reject) => {
+    task.on("state_changed",
+      (snap) => {
+        const pct = Math.round((snap.bytesTransferred / snap.totalBytes) * 100);
+        if (statusEl) statusEl.textContent = `Uploading… ${pct}%`;
+      },
+      (err) => reject(err),
+      () => resolve()
+    );
+  }).catch((err) => {
+    if (statusEl) statusEl.textContent = "Upload failed: " + (err.message || err.code || "unknown error");
+    throw err;
+  });
+
+  const url = await getDownloadURL(storageRef);
+  await setDoc(doc(db, "songs", songId, "files", fileId), {
+    name: file.name,
+    url,
+    path,
+    size: file.size,
+    uploadedAt: serverTimestamp(),
+    uploadedBy: currentUser.uid
+  });
+  toast("File uploaded.");
+  await loadSongFiles(songId);
+  renderSongFilesPanel(songId);
+  renderSongs(); // refreshes the "Files (N)" count on the button
+}
+
+async function deleteSongFile(songId, fileId, path){
+  await deleteObject(ref(storage, path)).catch(() => {}); // ignore if already gone from Storage
+  await deleteDoc(doc(db, "songs", songId, "files", fileId));
+  toast("File deleted.");
+  await loadSongFiles(songId);
+  renderSongFilesPanel(songId);
+  renderSongs();
 }
 
 document.getElementById("seed-songs-btn").addEventListener("click", async () => {
@@ -935,6 +1072,27 @@ function renderPreviewOptions(){
   renderPreview();
 }
 
+let songFilesLoading = new Set(); // songIds currently being fetched for the preview tab, to avoid duplicate reads
+
+function ensureSongFilesLoaded(sid){
+  if (songFilesCache[sid] || songFilesLoading.has(sid)) return;
+  songFilesLoading.add(sid);
+  loadSongFiles(sid).then(() => { songFilesLoading.delete(sid); renderPreview(); })
+    .catch(() => { songFilesLoading.delete(sid); songFilesCache[sid] = []; });
+}
+
+function renderPreviewFileLinks(sid){
+  if (!songFilesCache[sid]){
+    ensureSongFilesLoaded(sid); // fire and forget; renderPreview() re-runs once it resolves
+    return "";
+  }
+  const files = songFilesCache[sid];
+  if (!files.length) return "";
+  return `<div class="song-files">
+    ${files.map(f => `<a href="${f.url}" target="_blank" rel="noopener" class="song-file-link">📄 ${escapeHtml(f.name)} <span>(${formatFileSize(f.size)})</span></a>`).join("")}
+  </div>`;
+}
+
 function renderPreview(){
   const el = document.getElementById("preview-content");
   if (!el) return;
@@ -974,6 +1132,7 @@ function renderPreview(){
               ${song.category === "Uncategorized" ? "" : `<span class="cat-badge ${song.category}">${song.category}</span>`}
               ${song.composer ? escapeHtml(song.composer) : ""}
             </div>
+            ${renderPreviewFileLinks(sid)}
           </div>
           ${tag}
         </div>`;
