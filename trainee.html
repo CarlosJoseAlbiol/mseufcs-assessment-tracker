@@ -203,6 +203,10 @@
   .song-info{ min-width:0; }
   .song-title{ font-weight:600; font-size:14px; }
   .song-meta{ font-size:12px; color:var(--ink-soft); margin-top:1px; }
+  .song-files{ margin-top:6px; display:flex; flex-direction:column; gap:3px; }
+  .song-file-link{ font-size:12px; color:var(--crimson); font-weight:600; text-decoration:none; }
+  .song-file-link:hover{ text-decoration:underline; }
+  .song-file-link span{ color:var(--ink-soft); font-weight:400; }
   .cat-badge{
     display:inline-block;
     font-size:9.5px;
@@ -335,6 +339,8 @@ let songsById = {};        // songId -> song data
 let assessments = [];      // all assessment docs, sorted by date
 let progressByKey = {};    // `${assessmentId}_${songId}` -> "mastered" | "not_mastered"
 let members = [];          // every user account, for the "who's here" roster
+let songFilesCache = {};   // songId -> [{id, name, url, size}], loaded lazily as songs appear
+let songFilesLoading = new Set(); // songIds currently being fetched, to avoid duplicate reads
 
 const listEl = document.getElementById("assessment-list");
 const membersEl = document.getElementById("members-list");
@@ -455,6 +461,45 @@ function fmtDate(iso){
   return d.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" });
 }
 
+function formatFileSize(bytes){
+  if (!bytes && bytes !== 0) return "";
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + " KB";
+  return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+}
+
+// Files are loaded lazily, one read per song the first time it's shown,
+// then cached — so opening the dashboard doesn't fan out into dozens of
+// reads for songs that don't even have attachments.
+async function loadSongFiles(sid){
+  if (songFilesCache[sid] || songFilesLoading.has(sid)) return;
+  songFilesLoading.add(sid);
+  try {
+    const snap = await getDocs(query(collection(db, "songs", sid, "files"), orderBy("uploadedAt", "asc")));
+    const list = [];
+    snap.forEach(d => list.push({ id: d.id, ...d.data() }));
+    songFilesCache[sid] = list;
+    render();
+  } catch (err) {
+    console.error("song files load error:", err);
+    songFilesCache[sid] = [];
+  } finally {
+    songFilesLoading.delete(sid);
+  }
+}
+
+function renderSongFileLinks(sid){
+  if (!songFilesCache[sid]){
+    loadSongFiles(sid); // fire and forget; render() re-runs once it resolves
+    return "";
+  }
+  const files = songFilesCache[sid];
+  if (!files.length) return "";
+  return `<div class="song-files">
+    ${files.map(f => `<a href="${f.url}" target="_blank" rel="noopener" class="song-file-link">📄 ${escapeHtml(f.name)} <span>(${formatFileSize(f.size)})</span></a>`).join("")}
+  </div>`;
+}
+
 function render(){
   if (!assessments.length){
     listEl.className = "";
@@ -495,6 +540,7 @@ function render(){
               ${song.category === "Uncategorized" ? "" : `<span class="cat-badge cat-${song.category}">${song.category}</span>`}
               ${song.composer ? escapeHtml(song.composer) : ""}
             </div>
+            ${renderSongFileLinks(sid)}
           </div>
           <div class="stamp-controls">
             ${tag}
