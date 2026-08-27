@@ -322,10 +322,10 @@
   <section id="panel-repertoire" class="panel active">
     <div class="toolbar">
       <h2>Song Repertoire</h2>
-      <button class="btn btn-gold" id="seed-songs-btn">Load Master Repertoire (57 songs)</button>
+      <button class="btn btn-gold" id="seed-songs-btn">Load Master Repertoire (61 songs)</button>
     </div>
     <p style="font-size:12px; color:var(--ink-soft); margin:-8px 0 16px;">
-      Click "Files" on any song to attach sheet music, MIDI files, or recordings — trainees can view and download them, but never upload or delete. Max 25MB per file.
+      Click "Files" on any song to attach sheet music, MIDI files, or recordings — trainees can view and download them, but never upload or delete. Max 700KB per file (files are stored directly in the database, no billing account needed).
     </p>
 
     <div class="card">
@@ -350,7 +350,7 @@
   <section id="panel-schedule" class="panel">
     <div class="toolbar">
       <h2>Assessment Schedule</h2>
-      <button class="btn btn-gold" id="seed-schedule-btn">Load Suggested Schedule (9 dates)</button>
+      <button class="btn btn-gold" id="seed-schedule-btn">Load Suggested Schedule (11 dates)</button>
     </div>
 
     <div class="card">
@@ -407,15 +407,11 @@ import {
   getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc,
   collection, getDocs, query, orderBy, onSnapshot, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
-import {
-  getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject
-} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-storage.js";
 import { firebaseConfig } from "./js/firebase-config.js";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const storage = getStorage(app);
 
 let currentUser = null;
 let songs = [];             // [{id, title, composer, category}]
@@ -612,11 +608,14 @@ function renderSongs(){
 
 // =====================================================================
 // SONG FILES — sheet music, MIDI, recordings, etc. attached per song.
-// Metadata lives in Firestore (songs/{songId}/files/{fileId}); the
-// actual bytes live in Firebase Storage under song-files/{songId}/,
-// so each song effectively gets its own folder there.
+// No Firebase Storage (that needs a linked billing card) — instead the
+// file's bytes are Base64-encoded and stored directly on the Firestore
+// doc at songs/{songId}/files/{fileId}. Firestore caps a document at
+// 1MB, and Base64 inflates size by about a third, so the practical
+// ceiling here is a few hundred KB — fine for a short PDF or a MIDI
+// file, too small for a scanned multi-page score or audio.
 // =====================================================================
-const MAX_FILE_MB = 25;
+const MAX_FILE_KB = 700; // raw file size before Base64 encoding
 
 async function openSongFiles(songId){
   const panel = document.getElementById("files-panel-" + songId);
@@ -649,21 +648,22 @@ function renderSongFilesPanel(songId){
     <div style="margin-bottom:12px;">
       ${files.length ? files.map(f => `
         <div class="mini-song-row">
-          <span>📄 <a href="${f.url}" target="_blank" rel="noopener" style="color:var(--crimson); font-weight:600;">${escapeHtml(f.name)}</a>
+          <span>📄 <a href="${f.data}" download="${escapeHtml(f.name)}" style="color:var(--crimson); font-weight:600;">${escapeHtml(f.name)}</a>
             <span style="color:var(--ink-soft); font-size:11.5px;"> (${formatFileSize(f.size)})</span>
           </span>
-          <button class="icon-btn danger del-file-btn" data-song="${songId}" data-file="${f.id}" data-path="${escapeHtml(f.path)}">Delete</button>
+          <button class="icon-btn danger del-file-btn" data-song="${songId}" data-file="${f.id}">Delete</button>
         </div>`).join("") : `<p style="color:var(--ink-soft); font-size:13px; margin:0 0 8px;">No files uploaded yet for this song.</p>`}
     </div>
     <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
       <input type="file" class="song-file-input" data-song="${songId}" style="flex:1; min-width:180px;">
       <button class="btn btn-primary btn-sm upload-file-btn" data-song="${songId}">Upload</button>
     </div>
-    <p class="upload-status" data-song="${songId}" style="font-size:11.5px; color:var(--ink-soft); margin:6px 0 0;"></p>`;
+    <p style="font-size:11px; color:var(--ink-soft); margin:6px 0 0;">Max ${MAX_FILE_KB}KB per file — short PDFs and MIDI files work well; scanned multi-page scores or audio usually won't fit.</p>
+    <p class="upload-status" data-song="${songId}" style="font-size:11.5px; color:var(--ink-soft); margin:4px 0 0;"></p>`;
 
   panel.querySelectorAll(".del-file-btn").forEach(b => b.addEventListener("click", async () => {
     if (!confirm(`Delete "${b.closest(".mini-song-row").querySelector("a").textContent}"? This can't be undone.`)) return;
-    await deleteSongFile(b.dataset.song, b.dataset.file, b.dataset.path);
+    await deleteSongFile(b.dataset.song, b.dataset.file);
   }));
 
   panel.querySelector(".upload-file-btn").addEventListener("click", async () => {
@@ -671,51 +671,56 @@ function renderSongFilesPanel(songId){
     const file = input.files[0];
     const statusEl = panel.querySelector(".upload-status");
     if (!file){ statusEl.textContent = "Choose a file first."; return; }
-    if (file.size > MAX_FILE_MB * 1024 * 1024){
-      statusEl.textContent = `That file is over ${MAX_FILE_MB}MB — pick a smaller one.`;
+    if (file.size > MAX_FILE_KB * 1024){
+      statusEl.textContent = `That file is ${formatFileSize(file.size)} — over the ${MAX_FILE_KB}KB limit. Try a smaller or compressed version.`;
       return;
     }
     await uploadSongFile(songId, file, statusEl);
   });
 }
 
+function readFileAsDataURL(file){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
 async function uploadSongFile(songId, file, statusEl){
+  if (statusEl) statusEl.textContent = "Reading file…";
+  let dataUrl;
+  try {
+    dataUrl = await readFileAsDataURL(file);
+  } catch (err) {
+    if (statusEl) statusEl.textContent = "Couldn't read that file: " + (err.message || "unknown error");
+    return;
+  }
+
   const fileId = crypto.randomUUID();
-  const path = `song-files/${songId}/${fileId}_${file.name}`;
-  const storageRef = ref(storage, path);
-  const task = uploadBytesResumable(storageRef, file);
+  if (statusEl) statusEl.textContent = "Saving…";
+  try {
+    await setDoc(doc(db, "songs", songId, "files", fileId), {
+      name: file.name,
+      type: file.type || "application/octet-stream",
+      size: file.size,
+      data: dataUrl,
+      uploadedAt: serverTimestamp(),
+      uploadedBy: currentUser.uid
+    });
+  } catch (err) {
+    if (statusEl) statusEl.textContent = "Save failed: " + (err.message || err.code || "unknown error — the file may be too large for the database.");
+    return;
+  }
 
-  await new Promise((resolve, reject) => {
-    task.on("state_changed",
-      (snap) => {
-        const pct = Math.round((snap.bytesTransferred / snap.totalBytes) * 100);
-        if (statusEl) statusEl.textContent = `Uploading… ${pct}%`;
-      },
-      (err) => reject(err),
-      () => resolve()
-    );
-  }).catch((err) => {
-    if (statusEl) statusEl.textContent = "Upload failed: " + (err.message || err.code || "unknown error");
-    throw err;
-  });
-
-  const url = await getDownloadURL(storageRef);
-  await setDoc(doc(db, "songs", songId, "files", fileId), {
-    name: file.name,
-    url,
-    path,
-    size: file.size,
-    uploadedAt: serverTimestamp(),
-    uploadedBy: currentUser.uid
-  });
   toast("File uploaded.");
   await loadSongFiles(songId);
   renderSongFilesPanel(songId);
   renderSongs(); // refreshes the "Files (N)" count on the button
 }
 
-async function deleteSongFile(songId, fileId, path){
-  await deleteObject(ref(storage, path)).catch(() => {}); // ignore if already gone from Storage
+async function deleteSongFile(songId, fileId){
   await deleteDoc(doc(db, "songs", songId, "files", fileId));
   toast("File deleted.");
   await loadSongFiles(songId);
@@ -1089,7 +1094,7 @@ function renderPreviewFileLinks(sid){
   const files = songFilesCache[sid];
   if (!files.length) return "";
   return `<div class="song-files">
-    ${files.map(f => `<a href="${f.url}" target="_blank" rel="noopener" class="song-file-link">📄 ${escapeHtml(f.name)} <span>(${formatFileSize(f.size)})</span></a>`).join("")}
+    ${files.map(f => `<a href="${f.data}" download="${escapeHtml(f.name)}" class="song-file-link">📄 ${escapeHtml(f.name)} <span>(${formatFileSize(f.size)})</span></a>`).join("")}
   </div>`;
 }
 
@@ -1183,6 +1188,10 @@ const MASTER_SONGS = [
   {id:"himig-ng-hangin", title:"Himig ng Hangin", composer:"Norman Agatep", category:"Easy"},
   {id:"bibingka", title:"Bibingka", composer:"arr. Sunny Bautista", category:"Easy"},
   {id:"a-babe-is-born-in-bethlehem", title:"A Babe is Born in Bethlehem", composer:"", category:"Easy"},
+  {id:"lupang-hinirang", title:"Lupang Hinirang", composer:"Lucio San Pedro", category:"Easy"},
+  {id:"university-hymn", title:"University Hymn", composer:"Hubert Loresto", category:"Easy"},
+  {id:"english-mass", title:"English Mass", composer:"", category:"Easy"},
+  {id:"tagalog-mass", title:"Tagalog Mass", composer:"", category:"Easy"},
 
   {id:"gaano-ko-ikaw-kamahal", title:"Gaano Ko Ikaw Kamahal", composer:"Ernani J. Cuenco", category:"Medium"},
   {id:"nais-ko", title:"Nais Ko", composer:"Ryan Cayabyab", category:"Medium"},
@@ -1226,15 +1235,17 @@ const MASTER_SONGS = [
 ];
 
 const MASTER_SCHEDULE = [
-  { title:"September Assessment 1", date:"2026-09-18", songIds:["the-lord-bless-you-and-keep-you","one-thing-i-ask","gaano-ko-ikaw-kamahal","nais-ko","chua-ay"] },
-  { title:"September Assessment 2", date:"2026-10-02", songIds:["above-all-else","viri-galilaei","dahil-sa-iyo","minsan-ang-minahal-ay-ako","padayon"] },
-  { title:"October Assessment 1", date:"2026-10-16", songIds:["ave-verum-corpus","l-important-c-est-la-rose","pangarap-ko-ang-ibigin-ka","buhay-ng-buhay-ko","leron-leron-sinta"] },
-  { title:"October Assessment 2", date:"2026-10-30", songIds:["izzar-ederrak","bonse-aba","cebuano-medley","rosita-de-un-verde-palmar","sa-mahal-kong-bayan"] },
-  { title:"November Assessment 1", date:"2026-11-13", songIds:["kalesa","rosas-pandan","bahay","iisang-bangka","bituing-walang-ningning"] },
-  { title:"November Assessment 2", date:"2026-11-27", songIds:["ikaw-lamang","manila-manila","kay-ganda-ng-ating-musika","piliin-mo-ang-pilipinas","sanay-wala-nang-wakas","kruhay"] },
-  { title:"December Assessment 1", date:"2026-12-11", songIds:["himig-ng-hangin","bibingka","a-babe-is-born-in-bethlehem","simbang-gabi","pasko-na-naman","pasko-ng-madla","namamasko"] },
-  { title:"January Assessment 1", date:"2027-01-15", songIds:["abba-gold","dont-stop-me-now","bagani","noypi","o-salutaris-hostia","exultate-justi-in-domino"] },
-  { title:"January Assessment 2", date:"2027-01-29", songIds:["for-good","why-we-sing","til-i-met-you-ssaa","naay","now-that-i-have-you","the-majesty-and-glory-of-your-name","hallelujah-chorus"] },
+  { title:"September Assessment 1", date:"2026-09-18", songIds:["lupang-hinirang","university-hymn","the-lord-bless-you-and-keep-you","one-thing-i-ask","english-mass","tagalog-mass"] },
+  { title:"September Assessment 2", date:"2026-10-02", songIds:["above-all-else","viri-galilaei","cebuano-medley","rosita-de-un-verde-palmar","sa-mahal-kong-bayan"] },
+  { title:"October Assessment 1", date:"2026-10-16", songIds:["ave-verum-corpus","l-important-c-est-la-rose","kay-ganda-ng-ating-musika","piliin-mo-ang-pilipinas","bituing-walang-ningning"] },
+  { title:"October Assessment 2", date:"2026-10-30", songIds:["izzar-ederrak","bonse-aba","minsan-ang-minahal-ay-ako","pangarap-ko-ang-ibigin-ka","sanay-wala-nang-wakas"] },
+  { title:"November Assessment 1", date:"2026-11-13", songIds:["kalesa","rosas-pandan","buhay-ng-buhay-ko","dahil-sa-iyo","kruhay"] },
+  { title:"November Assessment 2", date:"2026-11-27", songIds:["himig-ng-hangin","bibingka","a-babe-is-born-in-bethlehem","simbang-gabi","pasko-na-naman","pasko-ng-madla","namamasko"] },
+  { title:"December Assessment 1", date:"2026-12-11", songIds:["ikaw-lamang","manila-manila","nais-ko","naay","chua-ay"] },
+  { title:"January Assessment 1", date:"2027-01-15", songIds:["abba-gold","dont-stop-me-now","bahay","noypi","padayon","leron-leron-sinta"] },
+  { title:"January Assessment 2", date:"2027-01-29", songIds:["for-good","why-we-sing","bagani","iisang-bangka","o-salutaris-hostia","exultate-justi-in-domino"] },
+  { title:"February Assessment 1", date:"2027-02-12", songIds:["til-i-met-you-ssaa","gaano-ko-ikaw-kamahal","now-that-i-have-you","hallelujah-chorus"] },
+  { title:"February Assessment 2", date:"2027-02-26", songIds:["the-majesty-and-glory-of-your-name"] },
 ];
 </script>
 
