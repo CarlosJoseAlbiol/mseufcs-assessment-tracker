@@ -496,7 +496,7 @@ function renderSongFileLinks(sid){
   const files = songFilesCache[sid];
   if (!files.length) return "";
   return `<div class="song-files">
-    ${files.map(f => `<a href="${f.url}" target="_blank" rel="noopener" class="song-file-link">📄 ${escapeHtml(f.name)} <span>(${formatFileSize(f.size)})</span></a>`).join("")}
+    ${files.map(f => `<a href="${f.data}" download="${escapeHtml(f.name)}" class="song-file-link">📄 ${escapeHtml(f.name)} <span>(${formatFileSize(f.size)})</span></a>`).join("")}
   </div>`;
 }
 
