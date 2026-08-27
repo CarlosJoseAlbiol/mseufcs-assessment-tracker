@@ -102,7 +102,6 @@
     position:relative; z-index:1;
     max-width:1100px; margin:0 auto;
     display:flex; gap:4px; padding:14px 20px 0;
-    flex-wrap:wrap;
   }
   nav.tabs button{
     border:none; background:transparent; cursor:pointer;
@@ -135,8 +134,6 @@
   .btn-danger{ background:var(--danger-bg); color:var(--danger); }
   .btn-danger:hover{ background:#f3d8d2; }
   .btn-sm{ padding:6px 11px; font-size:12px; border-radius:7px; }
-  .btn-outline{ background:transparent; border:1.5px solid var(--gold); color:var(--gold-deep); }
-  .btn-outline:hover{ background:var(--gold); color:var(--ink); }
 
   .card{
     background:#fff; border:1px solid var(--parchment-deep); border-radius:var(--radius);
@@ -268,29 +265,11 @@
   }
   .toast.show{ opacity:1; }
 
-  .toggle-wrap{ display:flex; align-items:center; gap:8px; font-size:13px; font-weight:500; color:var(--ink-soft); }
-  .toggle-wrap input[type="checkbox"]{
-    width:38px; height:22px; appearance:none; background:var(--parchment-deep); border-radius:999px;
-    border:1px solid var(--parchment-deep); cursor:pointer; position:relative; transition:background .15s ease;
-    flex-shrink:0;
-  }
-  .toggle-wrap input[type="checkbox"]:checked{ background:var(--gold); border-color:var(--gold); }
-  .toggle-wrap input[type="checkbox"]::after{
-    content:""; position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%;
-    background:#fff; transition:transform .15s ease; border:1px solid var(--parchment-deep);
-  }
-  .toggle-wrap input[type="checkbox"]:checked::after{ transform:translateX(16px); border-color:var(--gold); }
-  .toggle-wrap label{ cursor:pointer; user-select:none; font-weight:500; }
-
-  .settings-row{ display:flex; flex-wrap:wrap; gap:20px; align-items:center; }
-  .settings-row .toggle-wrap{ font-size:14px; }
-
   :focus-visible{ outline:2px solid var(--gold); outline-offset:2px; }
   @media (max-width:700px){
     .form-grid{ grid-template-columns:1fr; }
     .form-grid--3col{ grid-template-columns:1fr; }
-    nav.tabs{ overflow-x:auto; flex-wrap:nowrap; }
-    nav.tabs button{ white-space:nowrap; }
+    nav.tabs{ overflow-x:auto; }
     header{ padding:14px 16px; flex-wrap:wrap; gap:10px; }
     header h1{ font-size:15.5px; }
     header p{ font-size:11px; }
@@ -307,8 +286,6 @@
     .preview-song-row{ flex-wrap:wrap; }
     .mini-song-row{ flex-wrap:wrap; gap:6px; }
     .status-select{ min-width:140px; }
-    .toolbar .toggle-wrap{ order:10; width:100%; }
-    .settings-row{ flex-direction:column; align-items:flex-start; gap:12px; }
   }
   @media (prefers-reduced-motion: reduce){ *{transition:none !important;} }
 </style>
@@ -337,7 +314,6 @@
   <button data-tab="schedule">Schedule</button>
   <button data-tab="trainees">Members</button>
   <button data-tab="preview">Trainee View</button>
-  <button data-tab="settings">Settings</button>
 </nav>
 
 <main>
@@ -346,13 +322,7 @@
   <section id="panel-repertoire" class="panel active">
     <div class="toolbar">
       <h2>Song Repertoire</h2>
-      <div style="display:flex; gap:8px; flex-wrap:wrap;">
-        <div class="toggle-wrap">
-          <input type="checkbox" id="show-difficulties-rep" checked>
-          <label for="show-difficulties-rep">Show Difficulties (Staff view)</label>
-        </div>
-        <button class="btn btn-gold" id="seed-songs-btn">Load Master Repertoire (61 songs)</button>
-      </div>
+      <button class="btn btn-gold" id="seed-songs-btn">Load Master Repertoire (61 songs)</button>
     </div>
     <p style="font-size:12px; color:var(--ink-soft); margin:-8px 0 16px;">
       Click "Files" on any song to attach sheet music, MIDI files, or recordings — trainees can view and download them, but never upload or delete. Max 700KB per file (files are stored directly in the database, no billing account needed).
@@ -380,13 +350,7 @@
   <section id="panel-schedule" class="panel">
     <div class="toolbar">
       <h2>Assessment Schedule</h2>
-      <div style="display:flex; gap:8px; flex-wrap:wrap;">
-        <div class="toggle-wrap">
-          <input type="checkbox" id="show-difficulties-sched" checked>
-          <label for="show-difficulties-sched">Show Difficulties (Staff view)</label>
-        </div>
-        <button class="btn btn-gold" id="seed-schedule-btn">Load Suggested Schedule (11 dates)</button>
-      </div>
+      <button class="btn btn-gold" id="seed-schedule-btn">Load Suggested Schedule (11 dates)</button>
     </div>
 
     <div class="card">
@@ -411,10 +375,6 @@
   <section id="panel-trainees" class="panel">
     <div class="toolbar">
       <h2>Members &amp; Progress</h2>
-      <div class="toggle-wrap">
-        <input type="checkbox" id="show-difficulties-trainees" checked>
-        <label for="show-difficulties-trainees">Show Difficulties (Staff view)</label>
-      </div>
     </div>
     <div id="trainees-list" class="loading">Loading roster…</div>
   </section>
@@ -423,10 +383,6 @@
   <section id="panel-preview" class="panel">
     <div class="toolbar">
       <h2>Trainee View</h2>
-      <div class="toggle-wrap">
-        <input type="checkbox" id="show-difficulties-preview" checked>
-        <label for="show-difficulties-preview">Show Difficulties (Staff view)</label>
-      </div>
     </div>
     <p style="font-size:12.5px; color:var(--ink-soft); margin:-6px 0 16px; max-width:640px;">
       This shows exactly what the selected trainee sees on their own dashboard —
@@ -438,26 +394,6 @@
       <select id="preview-select"><option value="">— Select a trainee —</option></select>
     </div>
     <div id="preview-content"></div>
-  </section>
-
-  <!-- ============ SETTINGS TAB ============ -->
-  <section id="panel-settings" class="panel">
-    <div class="toolbar">
-      <h2>Global Settings</h2>
-    </div>
-    <div class="card">
-      <h3>Trainee Dashboard Visibility</h3>
-      <p style="font-size:13px; color:var(--ink-soft); margin-bottom:16px;">
-        Control what trainees can see on their dashboards. Changes take effect immediately.
-      </p>
-      <div class="settings-row">
-        <div class="toggle-wrap">
-          <input type="checkbox" id="trainee-show-difficulties" checked>
-          <label for="trainee-show-difficulties">Show Difficulty Levels to Trainees</label>
-        </div>
-        <span style="font-size:12px; color:var(--ink-soft);">When enabled, trainees see Easy/Medium/Hard/Intermediate badges next to each song.</span>
-      </div>
-    </div>
   </section>
 
 </main>
@@ -490,17 +426,6 @@ let openSongFilesId = null; // which song's file panel is currently expanded
 let songFilesCache = {};    // songId -> [{id, name, url, path, size, uploadedAt}]
 const ONLINE_WINDOW_MS = 90 * 1000; // heartbeats every 25s, so 90s covers a couple of missed beats
 
-// ---- Toggle state for showing difficulties (staff views) ----
-let showDifficulties = {
-  repertoire: true,
-  schedule: true,
-  trainees: true,
-  preview: true
-};
-
-// ---- Global setting: do trainees see difficulties? ----
-let traineeShowDifficulties = true;
-
 // ---- Auth gate: staff (Senior Member or MI) only. Trainees get bounced to their own dashboard. ----
 onAuthStateChanged(auth, async (user) => {
   if (!user){ window.location.href = "index.html"; return; }
@@ -514,10 +439,6 @@ onAuthStateChanged(auth, async (user) => {
   const isMI = profile.role === "mi";
   document.getElementById("who-badge").textContent = isMI ? "Master of Initiation" : "Senior Member";
   document.getElementById("dashboard-subtitle").textContent = isMI ? "Master of Initiation Dashboard" : "Senior Member Dashboard";
-  
-  // Load global settings
-  await loadGlobalSettings();
-  
   listenSongs();
   listenAssessments();
   listenProgress();
@@ -526,40 +447,6 @@ onAuthStateChanged(auth, async (user) => {
 });
 
 document.getElementById("signout-btn").addEventListener("click", () => signOut(auth));
-
-// ---- Load global settings from Firestore ----
-async function loadGlobalSettings(){
-  try {
-    const snap = await getDoc(doc(db, "settings", "global"));
-    if (snap.exists()) {
-      const data = snap.data();
-      traineeShowDifficulties = data.traineeShowDifficulties !== undefined ? data.traineeShowDifficulties : true;
-      document.getElementById("trainee-show-difficulties").checked = traineeShowDifficulties;
-    }
-  } catch (err) {
-    console.error("Error loading settings:", err);
-  }
-}
-
-async function saveGlobalSettings(){
-  try {
-    await setDoc(doc(db, "settings", "global"), {
-      traineeShowDifficulties: traineeShowDifficulties,
-      updatedAt: serverTimestamp(),
-      updatedBy: currentUser?.uid || "unknown"
-    });
-  } catch (err) {
-    console.error("Error saving settings:", err);
-    toast("Failed to save settings.");
-  }
-}
-
-// ---- Global setting toggle ----
-document.getElementById("trainee-show-difficulties").addEventListener("change", (e) => {
-  traineeShowDifficulties = e.target.checked;
-  saveGlobalSettings();
-  toast(`Trainees ${traineeShowDifficulties ? "can now" : "can no longer"} see difficulty levels.`);
-});
 
 // ---- Presence: a lightweight "I'm still here" ping every 25s. Anyone
 // viewing the member list computes online/offline from how recent this
@@ -605,24 +492,6 @@ function fmtDate(iso){
   if (isNaN(d)) return iso;
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
-
-// ---- Toggle event listeners (staff views) ----
-document.getElementById("show-difficulties-rep").addEventListener("change", (e) => {
-  showDifficulties.repertoire = e.target.checked;
-  renderSongs();
-});
-document.getElementById("show-difficulties-sched").addEventListener("change", (e) => {
-  showDifficulties.schedule = e.target.checked;
-  renderAssessments();
-});
-document.getElementById("show-difficulties-trainees").addEventListener("change", (e) => {
-  showDifficulties.trainees = e.target.checked;
-  renderTrainees();
-});
-document.getElementById("show-difficulties-preview").addEventListener("change", (e) => {
-  showDifficulties.preview = e.target.checked;
-  renderPreview();
-});
 
 // ---- Tabs ----------------------------------------------------------
 document.querySelectorAll("nav.tabs button").forEach(btn => {
@@ -670,7 +539,6 @@ function renderSongs(){
     el.innerHTML = `<div class="empty">No songs yet. Add one above, or load the master repertoire.</div>`;
     return;
   }
-  const showDif = showDifficulties.repertoire;
   const cats = ["Easy","Medium","Hard","Intermediate","Uncategorized"];
   el.innerHTML = cats.map(cat => {
     const list = songs.filter(s => s.category === cat);
@@ -680,13 +548,13 @@ function renderSongs(){
         <h3>${cat === "Uncategorized" ? "Uncategorized (not yet assigned a difficulty)" : cat} <span style="color:var(--ink-soft); font-weight:500; font-size:12px;">(${list.length})</span></h3>
         <div class="table-scroll">
         <table>
-          <thead><tr><th>Title</th><th>Composer / Arranger</th>${showDif ? '<th>Difficulty</th>' : ''}<th>Files</th><th></th></tr></thead>
+          <thead><tr><th>Title</th><th>Composer / Arranger</th><th>Difficulty</th><th>Files</th><th></th></tr></thead>
           <tbody>
             ${list.map(s => `
               <tr data-id="${s.id}">
                 <td class="cell-title">${escapeHtml(s.title)}</td>
                 <td class="cell-composer">${escapeHtml(s.composer) || "—"}</td>
-                ${showDif ? `<td class="cell-category"><span class="cat-badge ${s.category}">${s.category}</span></td>` : ''}
+                <td class="cell-category"><span class="cat-badge ${s.category}">${s.category}</span></td>
                 <td><button class="icon-btn files-btn" data-id="${s.id}">${songFilesCache[s.id] ? `Files (${songFilesCache[s.id].length})` : "Files"}</button></td>
                 <td>
                   <div class="row-actions">
@@ -695,7 +563,7 @@ function renderSongs(){
                   </div>
                 </td>
               </tr>
-              <tr><td colspan="${showDif ? 5 : 4}" style="padding:0; border:none;">
+              <tr><td colspan="5" style="padding:0; border:none;">
                 <div class="expand-panel ${openSongFilesId === s.id ? "open" : ""}" id="files-panel-${s.id}"></div>
               </td></tr>`).join("")}
           </tbody>
@@ -715,18 +583,16 @@ function renderSongs(){
     const song = songsById[b.dataset.id];
     row.querySelector(".cell-title").innerHTML = `<input class="edit-title" value="${escapeHtml(song.title)}">`;
     row.querySelector(".cell-composer").innerHTML = `<input class="edit-composer" value="${escapeHtml(song.composer)}">`;
-    if (showDifficulties.repertoire) {
-      row.querySelector(".cell-category").innerHTML = `
-        <select class="edit-category">
-          ${["Easy","Medium","Hard","Intermediate","Uncategorized"].map(c => `<option value="${c}" ${c === song.category ? "selected" : ""}>${c}</option>`).join("")}
-        </select>`;
-    }
+    row.querySelector(".cell-category").innerHTML = `
+      <select class="edit-category">
+        ${["Easy","Medium","Hard","Intermediate","Uncategorized"].map(c => `<option value="${c}" ${c === song.category ? "selected" : ""}>${c}</option>`).join("")}
+      </select>`;
     b.textContent = "Save";
     b.classList.remove("edit-song");
     b.addEventListener("click", async () => {
       const title = row.querySelector(".edit-title").value.trim();
       const composer = row.querySelector(".edit-composer").value.trim();
-      const category = showDifficulties.repertoire ? row.querySelector(".edit-category").value : song.category;
+      const category = row.querySelector(".edit-category").value;
       await updateDoc(doc(db, "songs", song.id), { title, composer, category });
       toast("Song updated.");
     }, { once: true });
@@ -954,7 +820,6 @@ function renderAssessments(){
     el.innerHTML = `<div class="empty">No assessments scheduled yet.</div>`;
     return;
   }
-  const showDif = showDifficulties.schedule;
   el.innerHTML = assessments.map(a => {
     const songIds = a.songIds || [];
     const counts = { mastered:0, not_mastered:0, pending:0 };
@@ -976,11 +841,7 @@ function renderAssessments(){
         <div class="assessment-card__body">
           ${a.notes ? `<p style="margin:0 0 10px; font-size:12.5px; color:var(--ink-soft); font-style:italic;">${escapeHtml(a.notes)}</p>` : ""}
           <div>
-            ${songIds.map(sid => {
-              const song = songsById[sid];
-              if (!song) return "";
-              return `<span class="song-chip">${escapeHtml(song.title)}${showDif ? ` <span class="cat-badge ${song.category}" style="font-size:8.5px;">${song.category}</span>` : ""}</span>`;
-            }).join("")}
+            ${songIds.map(sid => songsById[sid] ? `<span class="song-chip">${escapeHtml(songsById[sid].title)}</span>` : "").join("")}
             ${!songIds.length ? '<span style="color:var(--ink-soft); font-size:13px;">No songs assigned yet.</span>' : ""}
           </div>
           <div class="chip-row">
@@ -1086,7 +947,6 @@ function renderTrainees(){
 
   function renderGroupTable(list){
     if (!list.length) return `<div class="empty">No one here yet.</div>`;
-    const showDif = showDifficulties.trainees;
     return `
       <div class="table-scroll">
       <table>
@@ -1168,7 +1028,6 @@ function renderTraineeChecklist(uid){
     panel.innerHTML = `<p style="color:var(--ink-soft); font-size:13px;">No assessments scheduled yet.</p>`;
     return;
   }
-  const showDif = showDifficulties.trainees;
   panel.innerHTML = assessments.map(a => {
     const songIds = a.songIds || [];
     if (!songIds.length) return "";
@@ -1182,7 +1041,7 @@ function renderTraineeChecklist(uid){
           const status = entry ? entry.status : "pending";
           return `
             <div class="mini-song-row">
-              <span>${escapeHtml(song.title)} ${showDif ? `<span class="cat-badge ${song.category}" style="margin-left:6px;">${song.category}</span>` : ""}</span>
+              <span>${escapeHtml(song.title)} <span class="cat-badge ${song.category}" style="margin-left:6px;">${song.category}</span></span>
               <span>
                 <button class="stamp-btn check ${status === "mastered" ? "active" : ""}" data-uid="${uid}" data-a="${a.id}" data-s="${sid}" data-status="mastered">✓</button>
                 <button class="stamp-btn cross ${status === "not_mastered" ? "active" : ""}" data-uid="${uid}" data-a="${a.id}" data-s="${sid}" data-status="not_mastered">✕</button>
@@ -1250,7 +1109,6 @@ function renderPreview(){
     el.innerHTML = `<div class="empty">No assessments scheduled yet — this trainee's dashboard is currently empty.</div>`;
     return;
   }
-  const showDif = showDifficulties.preview;
 
   let total = 0, mastered = 0, notyet = 0, pending = 0;
   const cards = assessments.map(a => {
@@ -1276,7 +1134,7 @@ function renderPreview(){
           <div>
             <div class="preview-song-title">${escapeHtml(song.title)}</div>
             <div class="preview-song-meta">
-              ${showDif && song.category !== "Uncategorized" ? `<span class="cat-badge ${song.category}">${song.category}</span>` : ""}
+              ${song.category === "Uncategorized" ? "" : `<span class="cat-badge ${song.category}">${song.category}</span>`}
               ${song.composer ? escapeHtml(song.composer) : ""}
             </div>
             ${renderPreviewFileLinks(sid)}
@@ -1403,7 +1261,7 @@ const MASTER_SCHEDULE = [
     n.className = "note";
     n.textContent = symbols[Math.floor(Math.random() * symbols.length)];
     const size = 14 + Math.random() * 20;
-    const duration = 10 + Math.random() * 8;
+    const duration = 11 + Math.random() * 9;
     const drift = (Math.random() * 90 - 45) + "px";
     const spin = (Math.random() * 300 - 150) + "deg";
     n.style.left = (Math.random() * 100) + "vw";
@@ -1416,8 +1274,8 @@ const MASTER_SCHEDULE = [
   }
   const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   if (prefersReducedMotion) return;
-  for (let i = 0; i < 10; i++) setTimeout(spawn, i * 350);
-  setInterval(spawn, 1100);
+  for (let i = 0; i < 8; i++) setTimeout(spawn, i * 450);
+  setInterval(spawn, 1400);
 })();
 </script>
 </body>
