@@ -245,7 +245,7 @@
   .preview-song-title{ font-weight:600; font-size:13.5px; }
   .preview-song-meta{ font-size:11.5px; color:var(--ink-soft); margin-top:1px; }
   .song-files{ margin-top:6px; display:flex; flex-direction:column; gap:3px; }
-  .song-file-link{ font-size:11.5px; color:var(--crimson); font-weight:600; text-decoration:none; }
+  .song-file-link{ font-size:11.5px; color:var(--crimson); font-weight:600; text-decoration:none; background:none; border:none; padding:0; cursor:pointer; text-align:left; font-family:'Inter',sans-serif; }
   .song-file-link:hover{ text-decoration:underline; }
   .song-file-link span{ color:var(--ink-soft); font-weight:400; }
   .stamp-tag{
@@ -314,6 +314,7 @@
   <button data-tab="schedule">Schedule</button>
   <button data-tab="trainees">Members</button>
   <button data-tab="preview">Trainee View</button>
+  <button data-tab="settings">Settings</button>
 </nav>
 
 <main>
@@ -325,7 +326,7 @@
       <button class="btn btn-gold" id="seed-songs-btn">Load Master Repertoire (61 songs)</button>
     </div>
     <p style="font-size:12px; color:var(--ink-soft); margin:-8px 0 16px;">
-      Click "Files" on any song to attach sheet music, MIDI files, or recordings — trainees can view and download them, but never upload or delete. Max 700KB per file (files are stored directly in the database, no billing account needed).
+      Click "Files" on any song to attach sheet music, MIDI files, or recordings — trainees can view and download them, but never upload or delete. Max 2.5MB per file (files are stored directly in the database, no billing account needed).
     </p>
 
     <div class="card">
@@ -396,6 +397,27 @@
     <div id="preview-content"></div>
   </section>
 
+  <!-- ============ SETTINGS TAB ============ -->
+  <section id="panel-settings" class="panel">
+    <div class="toolbar">
+      <h2>Settings</h2>
+    </div>
+    <div class="card" style="max-width:560px;">
+      <h3>Difficulty Visibility</h3>
+      <p style="font-size:13px; color:var(--ink-soft); margin:0 0 14px;">
+        Controls whether trainees see a song's difficulty tag (Easy / Medium / Hard / Intermediate)
+        on their own dashboard. Turning this off hides every difficulty tag for every trainee,
+        everywhere — this is separate from the per-song "Uncategorized" trick, which only
+        hides the tag for individual songs that haven't been categorized yet.
+      </p>
+      <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-size:14px; font-weight:600;">
+        <input type="checkbox" id="show-difficulty-toggle" style="width:auto; transform:scale(1.3);">
+        Show difficulty tags to trainees
+      </label>
+      <p id="settings-status" style="font-size:11.5px; color:var(--ink-soft); margin:10px 0 0;"></p>
+    </div>
+  </section>
+
 </main>
 
 <div class="toast" id="toast"></div>
@@ -405,7 +427,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/fireba
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 import {
   getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc,
-  collection, getDocs, query, orderBy, onSnapshot, serverTimestamp
+  collection, getDocs, query, where, orderBy, onSnapshot, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 import { firebaseConfig } from "./js/firebase-config.js";
 
@@ -424,6 +446,7 @@ let openTraineeId = null;
 let previewUid = "";        // which trainee is currently shown in the Trainee View tab
 let openSongFilesId = null; // which song's file panel is currently expanded
 let songFilesCache = {};    // songId -> [{id, name, url, path, size, uploadedAt}]
+let showDifficulty = true;  // global toggle — whether trainees see difficulty tags at all
 const ONLINE_WINDOW_MS = 90 * 1000; // heartbeats every 25s, so 90s covers a couple of missed beats
 
 // ---- Auth gate: staff (Senior Member or MI) only. Trainees get bounced to their own dashboard. ----
@@ -443,7 +466,36 @@ onAuthStateChanged(auth, async (user) => {
   listenAssessments();
   listenProgress();
   listenUsers();
+  listenSettings();
   startHeartbeat();
+});
+
+// ---- Global settings (e.g. difficulty visibility) — shared across both dashboards. ----
+function listenSettings(){
+  onSnapshot(doc(db, "settings", "global"), (snap) => {
+    const data = snap.exists() ? snap.data() : {};
+    showDifficulty = data.showDifficulty !== false; // default true if the doc doesn't exist yet
+    const toggle = document.getElementById("show-difficulty-toggle");
+    if (toggle) toggle.checked = showDifficulty;
+    renderPreview(); // the preview tab must reflect the same setting trainees see
+  }, (err) => console.error("settings listener error:", err));
+}
+
+document.getElementById("show-difficulty-toggle").addEventListener("change", async (e) => {
+  const checked = e.target.checked;
+  const statusEl = document.getElementById("settings-status");
+  statusEl.textContent = "Saving…";
+  try {
+    await setDoc(doc(db, "settings", "global"), {
+      showDifficulty: checked,
+      updatedAt: serverTimestamp(),
+      updatedBy: currentUser.uid
+    }, { merge: true });
+    statusEl.textContent = checked ? "Difficulty tags are visible to trainees." : "Difficulty tags are hidden from trainees.";
+  } catch (err) {
+    statusEl.textContent = "Couldn't save: " + (err.message || err.code || "unknown error.");
+    e.target.checked = !checked; // revert the toggle since the save failed
+  }
 });
 
 document.getElementById("signout-btn").addEventListener("click", () => signOut(auth));
@@ -608,14 +660,17 @@ function renderSongs(){
 
 // =====================================================================
 // SONG FILES — sheet music, MIDI, recordings, etc. attached per song.
-// No Firebase Storage (that needs a linked billing card) — instead the
-// file's bytes are Base64-encoded and stored directly on the Firestore
-// doc at songs/{songId}/files/{fileId}. Firestore caps a document at
-// 1MB, and Base64 inflates size by about a third, so the practical
-// ceiling here is a few hundred KB — fine for a short PDF or a MIDI
-// file, too small for a scanned multi-page score or audio.
+// No Firebase Storage (that needs a linked billing card) — instead each
+// file is Base64-encoded and split into ~700KB chunks, each stored as
+// its own document under songs/{songId}/files/{fileId}/chunks/{n}.
+// Firestore caps any single document at 1MB, so one file can't live on
+// one doc past a few hundred KB — chunking is what lets a 2.5MB file
+// work while staying entirely within the free plan (no card needed).
+// The metadata doc (name/type/size/chunkCount) stays separate so the
+// file list can render without pulling every chunk down first.
 // =====================================================================
-const MAX_FILE_KB = 700; // raw file size before Base64 encoding
+const MAX_FILE_KB = 2560;      // ~2.5MB raw file size, before Base64 encoding
+const CHUNK_CHARS = 700000;    // Base64 characters per chunk doc — safely under Firestore's 1MB/doc cap
 
 async function openSongFiles(songId){
   const panel = document.getElementById("files-panel-" + songId);
@@ -648,22 +703,32 @@ function renderSongFilesPanel(songId){
     <div style="margin-bottom:12px;">
       ${files.length ? files.map(f => `
         <div class="mini-song-row">
-          <span>📄 <a href="${f.data}" download="${escapeHtml(f.name)}" style="color:var(--crimson); font-weight:600;">${escapeHtml(f.name)}</a>
+          <span>📄 <button class="file-download-btn" data-song="${songId}" data-file="${f.id}" style="background:none; border:none; padding:0; color:var(--crimson); font-weight:600; font-size:13px; cursor:pointer; text-decoration:underline;">${escapeHtml(f.name)}</button>
             <span style="color:var(--ink-soft); font-size:11.5px;"> (${formatFileSize(f.size)})</span>
           </span>
-          <button class="icon-btn danger del-file-btn" data-song="${songId}" data-file="${f.id}">Delete</button>
+          <button class="icon-btn danger del-file-btn" data-song="${songId}" data-file="${f.id}" data-chunks="${f.chunkCount}">Delete</button>
         </div>`).join("") : `<p style="color:var(--ink-soft); font-size:13px; margin:0 0 8px;">No files uploaded yet for this song.</p>`}
     </div>
     <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
       <input type="file" class="song-file-input" data-song="${songId}" style="flex:1; min-width:180px;">
       <button class="btn btn-primary btn-sm upload-file-btn" data-song="${songId}">Upload</button>
     </div>
-    <p style="font-size:11px; color:var(--ink-soft); margin:6px 0 0;">Max ${MAX_FILE_KB}KB per file — short PDFs and MIDI files work well; scanned multi-page scores or audio usually won't fit.</p>
+    <p style="font-size:11px; color:var(--ink-soft); margin:6px 0 0;">Max ${(MAX_FILE_KB/1024).toFixed(1)}MB per file — larger files take a bit longer to upload and download since they're split into pieces.</p>
     <p class="upload-status" data-song="${songId}" style="font-size:11.5px; color:var(--ink-soft); margin:4px 0 0;"></p>`;
 
   panel.querySelectorAll(".del-file-btn").forEach(b => b.addEventListener("click", async () => {
-    if (!confirm(`Delete "${b.closest(".mini-song-row").querySelector("a").textContent}"? This can't be undone.`)) return;
-    await deleteSongFile(b.dataset.song, b.dataset.file);
+    if (!confirm(`Delete "${b.closest(".mini-song-row").querySelector(".file-download-btn").textContent}"? This can't be undone.`)) return;
+    await deleteSongFile(b.dataset.song, b.dataset.file, parseInt(b.dataset.chunks, 10) || 0);
+  }));
+
+  panel.querySelectorAll(".file-download-btn").forEach(b => b.addEventListener("click", async () => {
+    const original = b.textContent;
+    b.textContent = "Preparing…";
+    try {
+      await downloadSongFile(b.dataset.song, b.dataset.file);
+    } finally {
+      b.textContent = original;
+    }
   }));
 
   panel.querySelector(".upload-file-btn").addEventListener("click", async () => {
@@ -672,7 +737,7 @@ function renderSongFilesPanel(songId){
     const statusEl = panel.querySelector(".upload-status");
     if (!file){ statusEl.textContent = "Choose a file first."; return; }
     if (file.size > MAX_FILE_KB * 1024){
-      statusEl.textContent = `That file is ${formatFileSize(file.size)} — over the ${MAX_FILE_KB}KB limit. Try a smaller or compressed version.`;
+      statusEl.textContent = `That file is ${formatFileSize(file.size)} — over the ${(MAX_FILE_KB/1024).toFixed(1)}MB limit. Try a smaller or compressed version.`;
       return;
     }
     await uploadSongFile(songId, file, statusEl);
@@ -698,19 +763,29 @@ async function uploadSongFile(songId, file, statusEl){
     return;
   }
 
+  const base64Payload = dataUrl.split(",")[1] || "";
+  const chunks = [];
+  for (let i = 0; i < base64Payload.length; i += CHUNK_CHARS){
+    chunks.push(base64Payload.slice(i, i + CHUNK_CHARS));
+  }
+
   const fileId = crypto.randomUUID();
-  if (statusEl) statusEl.textContent = "Saving…";
   try {
+    for (let i = 0; i < chunks.length; i++){
+      if (statusEl) statusEl.textContent = `Saving piece ${i + 1} of ${chunks.length}…`;
+      await setDoc(doc(db, "songs", songId, "files", fileId, "chunks", String(i)), { data: chunks[i] });
+    }
+    if (statusEl) statusEl.textContent = "Finishing…";
     await setDoc(doc(db, "songs", songId, "files", fileId), {
       name: file.name,
       type: file.type || "application/octet-stream",
       size: file.size,
-      data: dataUrl,
+      chunkCount: chunks.length,
       uploadedAt: serverTimestamp(),
       uploadedBy: currentUser.uid
     });
   } catch (err) {
-    if (statusEl) statusEl.textContent = "Save failed: " + (err.message || err.code || "unknown error — the file may be too large for the database.");
+    if (statusEl) statusEl.textContent = "Save failed: " + (err.message || err.code || "unknown error.");
     return;
   }
 
@@ -720,8 +795,38 @@ async function uploadSongFile(songId, file, statusEl){
   renderSongs(); // refreshes the "Files (N)" count on the button
 }
 
-async function deleteSongFile(songId, fileId){
-  await deleteDoc(doc(db, "songs", songId, "files", fileId));
+async function assembleSongFile(songId, fileId, meta){
+  const chunkDocs = [];
+  for (let i = 0; i < meta.chunkCount; i++){
+    chunkDocs.push(getDoc(doc(db, "songs", songId, "files", fileId, "chunks", String(i))));
+  }
+  const snaps = await Promise.all(chunkDocs);
+  const base64Payload = snaps.map(s => s.data().data).join("");
+  return `data:${meta.type};base64,${base64Payload}`;
+}
+
+async function downloadSongFile(songId, fileId){
+  const meta = (songFilesCache[songId] || []).find(f => f.id === fileId);
+  if (!meta) return;
+  try {
+    const dataUrl = await assembleSongFile(songId, fileId, meta);
+    const link = document.createElement("a");
+    link.href = dataUrl;
+    link.download = meta.name;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  } catch (err) {
+    toast("Couldn't download that file: " + (err.message || err.code || "unknown error."));
+  }
+}
+
+async function deleteSongFile(songId, fileId, chunkCount){
+  const deletions = [deleteDoc(doc(db, "songs", songId, "files", fileId))];
+  for (let i = 0; i < chunkCount; i++){
+    deletions.push(deleteDoc(doc(db, "songs", songId, "files", fileId, "chunks", String(i))));
+  }
+  await Promise.all(deletions);
   toast("File deleted.");
   await loadSongFiles(songId);
   renderSongFilesPanel(songId);
@@ -928,6 +1033,25 @@ async function setUserStatus(uid, value){
   }
 }
 
+// Removes a member's profile and progress records from the app. Their
+// Firebase Auth sign-in itself isn't deleted (that needs the Admin SDK,
+// which a client-only app like this doesn't have access to) — if they
+// sign in again later, ensureUserProfile() just creates them a fresh
+// trainee profile, same as any brand-new sign-up.
+async function removeMember(uid){
+  try {
+    const progressSnap = await getDocs(query(collection(db, "progress"), where("uid", "==", uid)));
+    const deletions = [];
+    progressSnap.forEach(d => deletions.push(deleteDoc(d.ref)));
+    deletions.push(deleteDoc(doc(db, "users", uid)));
+    await Promise.all(deletions);
+    if (openTraineeId === uid) openTraineeId = null;
+    toast("Member removed.");
+  } catch (err) {
+    toast("Couldn't remove that member: " + (err.message || err.code || "unknown error."));
+  }
+}
+
 async function setProgress(uid, assessmentId, songId, status){
   const key = `${assessmentId}_${songId}`;
   const current = progressAll.find(p => p.uid === uid && p.assessmentId === assessmentId && p.songId === songId);
@@ -973,7 +1097,10 @@ function renderTrainees(){
                 </select>
               </td>
               <td>
-                <button class="icon-btn view-progress-btn" data-id="${u.id}">${u.role === "trainee" ? `View Checklist (${progressCount} mastered)` : "—"}</button>
+                <div class="row-actions">
+                  <button class="icon-btn view-progress-btn" data-id="${u.id}">${u.role === "trainee" ? `View Checklist (${progressCount} mastered)` : "—"}</button>
+                  <button class="icon-btn danger remove-member-btn" data-id="${u.id}" data-name="${escapeHtml(u.name)}" ${isSelf ? "disabled title=\"You can't remove yourself\"" : ""}>Remove</button>
+                </div>
               </td>
             </tr>
             <tr><td colspan="5" style="padding:0; border:none;">
@@ -1017,6 +1144,13 @@ function renderTrainees(){
     openTraineeId = openTraineeId === uid ? null : uid;
     renderTrainees();
     if (openTraineeId) renderTraineeChecklist(uid);
+  }));
+  el.querySelectorAll(".remove-member-btn").forEach(b => b.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    if (b.disabled) return;
+    const name = b.dataset.name;
+    if (!confirm(`Remove ${name} from the list? This deletes their profile and progress records from the app.\n\nThis does NOT delete their actual sign-in — if they log in again afterward, they'll just start over as a brand-new trainee. To fully block an email from ever signing in again, delete it manually from Firebase Console > Authentication.`)) return;
+    await removeMember(b.dataset.id);
   }));
 }
 
@@ -1065,6 +1199,21 @@ function renderTraineeChecklist(uid){
 const previewSelect = document.getElementById("preview-select");
 previewSelect.addEventListener("change", () => { previewUid = previewSelect.value; renderPreview(); });
 
+// Delegated listener for file download buttons inside the preview — the
+// container's innerHTML is regenerated often, so binding once here
+// beats re-attaching a listener after every render.
+document.getElementById("preview-content").addEventListener("click", async (e) => {
+  const btn = e.target.closest(".file-download-btn");
+  if (!btn) return;
+  const original = btn.innerHTML;
+  btn.textContent = "Preparing…";
+  try {
+    await downloadSongFile(btn.dataset.song, btn.dataset.file);
+  } finally {
+    btn.innerHTML = original;
+  }
+});
+
 function renderPreviewOptions(){
   const trainees = users.filter(u => u.role === "trainee")
     .sort((a,b) => (a.name||"").localeCompare(b.name||""));
@@ -1094,7 +1243,7 @@ function renderPreviewFileLinks(sid){
   const files = songFilesCache[sid];
   if (!files.length) return "";
   return `<div class="song-files">
-    ${files.map(f => `<a href="${f.data}" download="${escapeHtml(f.name)}" class="song-file-link">📄 ${escapeHtml(f.name)} <span>(${formatFileSize(f.size)})</span></a>`).join("")}
+    ${files.map(f => `<button class="song-file-link file-download-btn" data-song="${sid}" data-file="${f.id}">📄 ${escapeHtml(f.name)} <span>(${formatFileSize(f.size)})</span></button>`).join("")}
   </div>`;
 }
 
@@ -1134,7 +1283,7 @@ function renderPreview(){
           <div>
             <div class="preview-song-title">${escapeHtml(song.title)}</div>
             <div class="preview-song-meta">
-              ${song.category === "Uncategorized" ? "" : `<span class="cat-badge ${song.category}">${song.category}</span>`}
+              ${(!showDifficulty || song.category === "Uncategorized") ? "" : `<span class="cat-badge ${song.category}">${song.category}</span>`}
               ${song.composer ? escapeHtml(song.composer) : ""}
             </div>
             ${renderPreviewFileLinks(sid)}
