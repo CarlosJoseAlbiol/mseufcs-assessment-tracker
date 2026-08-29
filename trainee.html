@@ -204,7 +204,7 @@
   .song-title{ font-weight:600; font-size:14px; }
   .song-meta{ font-size:12px; color:var(--ink-soft); margin-top:1px; }
   .song-files{ margin-top:6px; display:flex; flex-direction:column; gap:3px; }
-  .song-file-link{ font-size:12px; color:var(--crimson); font-weight:600; text-decoration:none; }
+  .song-file-link{ font-size:12px; color:var(--crimson); font-weight:600; text-decoration:none; background:none; border:none; padding:0; cursor:pointer; text-align:left; font-family:'Inter',sans-serif; }
   .song-file-link:hover{ text-decoration:underline; }
   .song-file-link span{ color:var(--ink-soft); font-weight:400; }
   .cat-badge{
@@ -341,10 +341,26 @@ let progressByKey = {};    // `${assessmentId}_${songId}` -> "mastered" | "not_m
 let members = [];          // every user account, for the "who's here" roster
 let songFilesCache = {};   // songId -> [{id, name, url, size}], loaded lazily as songs appear
 let songFilesLoading = new Set(); // songIds currently being fetched, to avoid duplicate reads
+let showDifficulty = true; // global toggle set by staff — whether difficulty tags show at all
 
 const listEl = document.getElementById("assessment-list");
 const membersEl = document.getElementById("members-list");
 const ONLINE_WINDOW_MS = 90 * 1000; // heartbeats every 25s, so 90s covers a couple of missed beats
+
+// Delegated listener for file download buttons inside the schedule — the
+// container's innerHTML is regenerated often, so binding once here
+// beats re-attaching a listener after every render.
+listEl.addEventListener("click", async (e) => {
+  const btn = e.target.closest(".file-download-btn");
+  if (!btn) return;
+  const original = btn.innerHTML;
+  btn.textContent = "Preparing…";
+  try {
+    await downloadSongFile(btn.dataset.song, btn.dataset.file);
+  } finally {
+    btn.innerHTML = original;
+  }
+});
 
 // ---- Auth gate: trainees only. Staff (Senior Member or MI) get bounced to their own dashboard. ----
 onAuthStateChanged(auth, async (user) => {
@@ -360,8 +376,18 @@ onAuthStateChanged(auth, async (user) => {
   listenAssessments();
   listenProgress();
   listenMembers();
+  listenSettings();
   startHeartbeat();
 });
+
+// ---- Global settings (e.g. difficulty visibility), set by staff. ----
+function listenSettings(){
+  onSnapshot(doc(db, "settings", "global"), (snap) => {
+    const data = snap.exists() ? snap.data() : {};
+    showDifficulty = data.showDifficulty !== false; // default true if the doc doesn't exist yet
+    render();
+  }, (err) => console.error("settings listener error:", err));
+}
 
 document.getElementById("signout-btn").addEventListener("click", () => signOut(auth));
 
@@ -496,8 +522,37 @@ function renderSongFileLinks(sid){
   const files = songFilesCache[sid];
   if (!files.length) return "";
   return `<div class="song-files">
-    ${files.map(f => `<a href="${f.data}" download="${escapeHtml(f.name)}" class="song-file-link">📄 ${escapeHtml(f.name)} <span>(${formatFileSize(f.size)})</span></a>`).join("")}
+    ${files.map(f => `<button class="song-file-link file-download-btn" data-song="${sid}" data-file="${f.id}">📄 ${escapeHtml(f.name)} <span>(${formatFileSize(f.size)})</span></button>`).join("")}
   </div>`;
+}
+
+// A file's bytes are split across chunk docs (songs/{sid}/files/{fid}/chunks/{n})
+// since Firestore caps a single document around 1MB — this stitches them
+// back together into one downloadable file.
+async function assembleSongFile(sid, fileId, meta){
+  const chunkPromises = [];
+  for (let i = 0; i < meta.chunkCount; i++){
+    chunkPromises.push(getDoc(doc(db, "songs", sid, "files", fileId, "chunks", String(i))));
+  }
+  const snaps = await Promise.all(chunkPromises);
+  const base64Payload = snaps.map(s => s.data().data).join("");
+  return `data:${meta.type};base64,${base64Payload}`;
+}
+
+async function downloadSongFile(sid, fileId){
+  const meta = (songFilesCache[sid] || []).find(f => f.id === fileId);
+  if (!meta) return;
+  try {
+    const dataUrl = await assembleSongFile(sid, fileId, meta);
+    const link = document.createElement("a");
+    link.href = dataUrl;
+    link.download = meta.name;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  } catch (err) {
+    console.error("song file download error:", err);
+  }
 }
 
 function render(){
@@ -537,7 +592,7 @@ function render(){
           <div class="song-info">
             <div class="song-title">${escapeHtml(song.title)}</div>
             <div class="song-meta">
-              ${song.category === "Uncategorized" ? "" : `<span class="cat-badge cat-${song.category}">${song.category}</span>`}
+              ${(!showDifficulty || song.category === "Uncategorized") ? "" : `<span class="cat-badge cat-${song.category}">${song.category}</span>`}
               ${song.composer ? escapeHtml(song.composer) : ""}
             </div>
             ${renderSongFileLinks(sid)}
