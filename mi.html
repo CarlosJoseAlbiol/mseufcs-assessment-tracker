@@ -201,6 +201,14 @@
   .chip{ font-size:11px; font-weight:600; padding:4px 10px; border-radius:999px; }
   .chip.mastered{ background:var(--success-bg); color:var(--success); }
   .chip.notyet{ background:var(--danger-bg); color:var(--danger); }
+  .chip.done{ background:var(--success-bg); color:var(--success); margin-left:8px; text-transform:none; letter-spacing:0; vertical-align:middle; }
+  .schedule-tabs{ display:flex; gap:6px; margin-bottom:16px; }
+  .schedule-tab{
+    border:1.5px solid var(--parchment-deep); background:#fff; color:var(--ink-soft);
+    font-family:'Inter',sans-serif; font-weight:600; font-size:12.5px;
+    padding:7px 16px; border-radius:999px; cursor:pointer;
+  }
+  .schedule-tab.active{ background:var(--crimson); border-color:var(--crimson); color:#fff; }
   .chip.pending{ background:var(--parchment-deep); color:var(--ink-soft); }
   .song-chip{ font-size:12px; background:#fff; border:1px solid var(--parchment-deep); padding:4px 10px; border-radius:999px; margin:3px 4px 0 0; display:inline-block; }
 
@@ -395,6 +403,10 @@
       <label for="preview-select" style="display:block; font-size:11px; font-weight:600; color:var(--ink-soft); margin-bottom:8px; text-transform:uppercase; letter-spacing:0.3px;">Previewing as</label>
       <select id="preview-select"><option value="">— Select a trainee —</option></select>
     </div>
+    <div class="schedule-tabs">
+      <button type="button" class="schedule-tab active" id="preview-filter-upcoming" data-filter="upcoming">Upcoming</button>
+      <button type="button" class="schedule-tab" id="preview-filter-completed" data-filter="completed">Completed</button>
+    </div>
     <div id="preview-content"></div>
   </section>
 
@@ -445,6 +457,7 @@ let users = [];             // [{id, name, email, role, rank, voicePart, lastAct
 let selectedSongIds = new Set(); // for the assessment form's checkbox picker
 let openTraineeId = null;
 let previewUid = "";        // which trainee is currently shown in the Trainee View tab
+let previewFilter = "upcoming"; // "upcoming" | "completed" — mirrors the trainee dashboard's own tabs
 let openSongFilesId = null; // which song's file panel is currently expanded
 let songFilesCache = {};    // songId -> [{id, name, url, path, size, uploadedAt}]
 let showDifficulty = true;  // global toggle — whether trainees see difficulty tags at all
@@ -935,12 +948,13 @@ function renderAssessments(){
     });
     const marked = progressAll.filter(p => p.assessmentId === a.id);
     marked.forEach(p => { if (p.status === "mastered") counts.mastered++; else if (p.status === "not_mastered") counts.not_mastered++; });
+    const isDone = !!a.completed;
 
     return `
       <div class="assessment-card">
         <div class="assessment-card__head">
           <div class="title-block">
-            <h3>${escapeHtml(a.title)}</h3>
+            <h3>${escapeHtml(a.title)} ${isDone ? `<span class="chip done">✓ Completed</span>` : ""}</h3>
           </div>
           <div class="date">${fmtDate(a.date)}</div>
         </div>
@@ -955,12 +969,19 @@ function renderAssessments(){
             <span class="chip notyet">${counts.not_mastered} not-yet marks</span>
           </div>
           <div class="row-actions" style="margin-top:12px;">
+            <button class="icon-btn ${isDone ? "" : "done-toggle-btn"} toggle-completed-btn" data-id="${a.id}" data-completed="${isDone}">${isDone ? "Mark Not Completed" : "Mark Completed"}</button>
             <button class="icon-btn edit-assessment" data-id="${a.id}">Edit</button>
             <button class="icon-btn danger del-assessment" data-id="${a.id}">Delete</button>
           </div>
         </div>
       </div>`;
   }).join("");
+
+  el.querySelectorAll(".toggle-completed-btn").forEach(b => b.addEventListener("click", async () => {
+    const currentlyCompleted = b.dataset.completed === "true";
+    await updateDoc(doc(db, "assessments", b.dataset.id), { completed: !currentlyCompleted });
+    toast(currentlyCompleted ? "Marked as not completed." : "Marked as completed.");
+  }));
 
   el.querySelectorAll(".del-assessment").forEach(b => b.addEventListener("click", async () => {
     if (!confirm("Delete this assessment? Trainee marks for it will be orphaned but not auto-deleted.")) return;
@@ -1200,6 +1221,15 @@ function renderTraineeChecklist(uid){
 const previewSelect = document.getElementById("preview-select");
 previewSelect.addEventListener("change", () => { previewUid = previewSelect.value; renderPreview(); });
 
+document.querySelectorAll(".schedule-tab").forEach(btn => {
+  btn.addEventListener("click", () => {
+    previewFilter = btn.dataset.filter;
+    document.querySelectorAll(".schedule-tab").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    renderPreview();
+  });
+});
+
 // Delegated listener for file download buttons inside the preview — the
 // container's innerHTML is regenerated often, so binding once here
 // beats re-attaching a listener after every render.
@@ -1255,13 +1285,14 @@ function renderPreview(){
     el.innerHTML = `<div class="empty">Pick a trainee above to see their dashboard exactly as they see it.</div>`;
     return;
   }
-  if (!assessments.length){
-    el.innerHTML = `<div class="empty">No assessments scheduled yet — this trainee's dashboard is currently empty.</div>`;
+  const filtered = assessments.filter(a => !!a.completed === (previewFilter === "completed"));
+  if (!filtered.length){
+    el.innerHTML = `<div class="empty">${previewFilter === "completed" ? "No assessments have been completed yet." : "No upcoming assessments scheduled — this trainee's dashboard is currently empty here."}</div>`;
     return;
   }
 
   let total = 0, mastered = 0, notyet = 0, pending = 0;
-  const cards = assessments.map(a => {
+  const cards = filtered.map(a => {
     const songIds = a.songIds || [];
     const rows = songIds.map(sid => {
       const song = songsById[sid];
