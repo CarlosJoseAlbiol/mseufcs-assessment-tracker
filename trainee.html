@@ -129,6 +129,19 @@
     margin:0 0 12px;
   }
 
+  .schedule-tabs{ display:flex; gap:6px; margin-bottom:16px; }
+  .schedule-tab{
+    border:1.5px solid var(--parchment-deep); background:#fff; color:var(--ink-soft);
+    font-family:'Inter',sans-serif; font-weight:600; font-size:12.5px;
+    padding:7px 16px; border-radius:999px; cursor:pointer;
+  }
+  .schedule-tab.active{ background:var(--crimson); border-color:var(--crimson); color:#fff; }
+  .completed-badge{
+    display:inline-block; font-size:10px; font-weight:700; letter-spacing:0.3px;
+    background:var(--success-bg); color:var(--success); padding:3px 9px; border-radius:999px;
+    vertical-align:middle; margin-left:6px; text-transform:none;
+  }
+
   .card{
     background:#fff;
     border:1px solid var(--parchment-deep);
@@ -319,6 +332,10 @@
   </div>
 
   <h2 class="section-title">Your Assessment Schedule</h2>
+  <div class="schedule-tabs">
+    <button type="button" class="schedule-tab active" data-filter="upcoming">Upcoming</button>
+    <button type="button" class="schedule-tab" data-filter="completed">Completed</button>
+  </div>
   <div id="assessment-list" class="loading">Loading your schedule…</div>
 </main>
 
@@ -343,6 +360,7 @@ let members = [];          // every user account, for the "who's here" roster
 let songFilesCache = {};   // songId -> [{id, name, url, size}], loaded lazily as songs appear
 let songFilesLoading = new Set(); // songIds currently being fetched, to avoid duplicate reads
 let showDifficulty = true; // global toggle set by staff — whether difficulty tags show at all
+let scheduleFilter = "upcoming"; // "upcoming" | "completed" — which tab is active
 
 const listEl = document.getElementById("assessment-list");
 const membersEl = document.getElementById("members-list");
@@ -361,6 +379,15 @@ listEl.addEventListener("click", async (e) => {
   } finally {
     btn.innerHTML = original;
   }
+});
+
+document.querySelectorAll(".schedule-tab").forEach(btn => {
+  btn.addEventListener("click", () => {
+    scheduleFilter = btn.dataset.filter;
+    document.querySelectorAll(".schedule-tab").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    render();
+  });
 });
 
 // ---- Auth gate: trainees only. Staff (Senior Member or MI) get bounced to their own dashboard. ----
@@ -557,12 +584,20 @@ async function downloadSongFile(sid, fileId){
 }
 
 function render(){
-  if (!assessments.length){
+  const filtered = assessments.filter(a => !!a.completed === (scheduleFilter === "completed"));
+
+  if (!filtered.length){
     listEl.className = "";
-    listEl.innerHTML = `
+    listEl.innerHTML = scheduleFilter === "completed"
+      ? `
       <div class="empty">
         <div class="seal-lg">MI</div>
-        <p>No assessments have been scheduled yet.<br>Check back once your Master of Initiation posts the calendar.</p>
+        <p>No assessments have been marked completed yet.</p>
+      </div>`
+      : `
+      <div class="empty">
+        <div class="seal-lg">MI</div>
+        <p>No upcoming assessments have been scheduled yet.<br>Check back once your Master of Initiation posts the calendar.</p>
       </div>`;
     updateStats(0,0,0,0);
     return;
@@ -570,7 +605,7 @@ function render(){
 
   let total = 0, mastered = 0, notyet = 0, pending = 0;
   listEl.className = "";
-  listEl.innerHTML = assessments.map(a => {
+  listEl.innerHTML = filtered.map(a => {
     const songIds = a.songIds || [];
     const rows = songIds.map(sid => {
       const song = songsById[sid];
@@ -609,7 +644,7 @@ function render(){
     return `
       <div class="assessment">
         <div class="assessment__head">
-          <h2>${escapeHtml(a.title || "Assessment")}</h2>
+          <h2>${escapeHtml(a.title || "Assessment")} ${a.completed ? `<span class="completed-badge">✓ Completed</span>` : ""}</h2>
           <div class="assessment__date">${fmtDate(a.date)}</div>
         </div>
         ${a.notes ? `<div class="assessment__notes">${escapeHtml(a.notes)}</div>` : ""}
