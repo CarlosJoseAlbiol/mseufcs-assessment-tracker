@@ -134,8 +134,23 @@
     border:1.5px solid var(--parchment-deep); background:#fff; color:var(--ink-soft);
     font-family:'Inter',sans-serif; font-weight:600; font-size:12.5px;
     padding:7px 16px; border-radius:999px; cursor:pointer;
+    transition:background .22s ease, color .22s ease, border-color .22s ease, transform .12s ease;
   }
+  .schedule-tab:active{ transform:scale(0.96); }
   .schedule-tab.active{ background:var(--crimson); border-color:var(--crimson); color:#fff; }
+  @keyframes fadeSlideIn{
+    from{ opacity:0; transform:translateY(10px); }
+    to{ opacity:1; transform:translateY(0); }
+  }
+  .fade-refresh{ animation:fadeSlideIn .3s cubic-bezier(.2,.7,.3,1); }
+  header{ animation:headerIn .5s ease backwards; }
+  @keyframes headerIn{ from{ opacity:0; transform:translateY(-12px); } to{ opacity:1; transform:translateY(0); } }
+  .stat{ animation:fadeSlideIn .45s cubic-bezier(.2,.7,.3,1) backwards; }
+  .stat:nth-child(2){ animation-delay:.06s; }
+  .stat:nth-child(3){ animation-delay:.12s; }
+  .stat:nth-child(4){ animation-delay:.18s; }
+  .assessment{ transition:box-shadow .2s ease; }
+  .assessment:hover{ box-shadow:0 10px 24px -14px rgba(43,33,26,0.35); }
   .completed-badge{
     display:inline-block; font-size:10px; font-weight:700; letter-spacing:0.3px;
     background:var(--success-bg); color:var(--success); padding:3px 9px; border-radius:999px;
@@ -297,7 +312,7 @@
     .stamp-controls{ width:100%; justify-content:flex-end; }
     .member-row{ padding:9px 14px; }
   }
-  @media (prefers-reduced-motion: reduce){ *{transition:none !important;} }
+  @media (prefers-reduced-motion: reduce){ *{transition:none !important; animation:none !important;} }
 </style>
 </head>
 <body>
@@ -387,6 +402,11 @@ document.querySelectorAll(".schedule-tab").forEach(btn => {
     document.querySelectorAll(".schedule-tab").forEach(b => b.classList.remove("active"));
     btn.classList.add("active");
     render();
+    // Replay the fade so the swap reads as a transition, not a jump.
+    // Only on user-initiated tab clicks — not on background data updates.
+    listEl.classList.remove("fade-refresh");
+    void listEl.offsetWidth; // force reflow so the animation restarts
+    listEl.classList.add("fade-refresh");
   });
 });
 
@@ -584,7 +604,12 @@ async function downloadSongFile(sid, fileId){
 }
 
 function render(){
-  const filtered = assessments.filter(a => !!a.completed === (scheduleFilter === "completed"));
+  // Missing "published" field = treated as published, so assessments
+  // created before this feature existed keep showing exactly as before.
+  // Only assessments explicitly marked published:false (drafts) are hidden.
+  const filtered = assessments
+    .filter(a => a.published !== false)
+    .filter(a => !!a.completed === (scheduleFilter === "completed"));
 
   if (!filtered.length){
     listEl.className = "";
