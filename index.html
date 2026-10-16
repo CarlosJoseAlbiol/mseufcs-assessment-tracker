@@ -135,7 +135,7 @@
     color:var(--ink-soft);
     border-radius:999px;
     cursor:pointer;
-    transition:all .18s ease;
+    transition:background .25s ease, color .25s ease, box-shadow .25s ease;
   }
   .tabs button.active{
     background:#fff;
@@ -164,7 +164,15 @@
     transition:border-color .15s ease;
   }
   input:focus{ border-color:var(--gold); box-shadow:0 0 0 3px rgba(245,179,1,0.14); }
-  #name-field{ display:none; }
+  #name-field{
+    max-height:0; opacity:0; overflow:hidden; visibility:hidden;
+    padding:3px; margin:-3px; /* room for the input's focus glow without clipping */
+    transition:max-height .35s ease, opacity .25s ease, visibility 0s linear .35s;
+  }
+  #name-field.show{
+    max-height:110px; opacity:1; visibility:visible;
+    transition:max-height .35s ease, opacity .3s ease .05s, visibility 0s;
+  }
   button.submit{
     width:100%;
     margin-top:22px;
@@ -201,6 +209,30 @@
     color:var(--ink-soft);
     line-height:1.5;
   }
+  @keyframes cardIn{
+    from{ opacity:0; transform:translateY(18px) scale(.985); }
+    to{ opacity:1; transform:translateY(0) scale(1); }
+  }
+  @keyframes logoIn{
+    from{ opacity:0; transform:translateY(-10px) scale(.9); }
+    to{ opacity:1; transform:translateY(0) scale(1); }
+  }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+  @keyframes msgIn{
+    from{ opacity:0; transform:translateY(-4px); }
+    to{ opacity:1; transform:translateY(0); }
+  }
+  .hero-logo{ animation:logoIn .7s cubic-bezier(.2,.7,.3,1) backwards; }
+  .card{ animation:cardIn .65s cubic-bezier(.2,.7,.3,1) .12s backwards; }
+  .msg.error, .msg.info{ animation:msgIn .25s ease; }
+  button.submit:disabled::after{
+    content:""; display:inline-block; width:12px; height:12px; margin-left:9px;
+    border:2px solid rgba(255,255,255,.35); border-top-color:#fff; border-radius:50%;
+    animation:spin .7s linear infinite; vertical-align:-2px;
+  }
+  /* Fade the whole screen out just before redirecting after sign-in */
+  .hero-logo, .card{ transition:opacity .25s ease, transform .25s ease; }
+  body.leaving .hero-logo, body.leaving .card{ opacity:0; transform:translateY(-10px) scale(.98); }
   :focus-visible{ outline:2px solid var(--gold); outline-offset:2px; }
   @media (max-width:400px){
     .hero-logo{ width:92px; height:92px; }
@@ -208,7 +240,7 @@
     .card__band h1{ font-size:20px; }
     .card__body{ padding:22px 22px 26px; }
   }
-  @media (prefers-reduced-motion: reduce){ *{transition:none !important;} }
+  @media (prefers-reduced-motion: reduce){ *{transition:none !important; animation:none !important;} }
 </style>
 </head>
 <body>
@@ -273,7 +305,7 @@ function setMode(next){
   mode = next;
   tabLogin.classList.toggle("active", mode === "login");
   tabSignup.classList.toggle("active", mode === "signup");
-  nameField.style.display = mode === "signup" ? "block" : "none";
+  nameField.classList.toggle("show", mode === "signup");
   submitBtn.textContent = mode === "signup" ? "Create Account" : "Sign In";
   msg.className = "msg";
 }
@@ -290,10 +322,15 @@ function showInfo(text){
 }
 
 // ---- Redirect if already signed in ----------------------------------
+function goTo(url){
+  document.body.classList.add("leaving");
+  setTimeout(() => { window.location.href = url; }, 260);
+}
+
 onAuthStateChanged(auth, async (user) => {
   if (!user) return;
   const profile = await ensureProfile(user);
-  window.location.href = (profile.role === "mi" || profile.role === "senior") ? "mi.html" : "trainee.html";
+  goTo((profile.role === "mi" || profile.role === "senior") ? "mi.html" : "trainee.html");
 });
 
 async function ensureProfile(user, name){
