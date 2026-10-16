@@ -114,7 +114,17 @@
 
   main{ position:relative; z-index:1; max-width:1100px; margin:0 auto; padding:22px 20px 90px; }
   .panel{ display:none; }
-  .panel.active{ display:block; }
+  .panel.active{ display:block; animation:fadeSlideIn .32s cubic-bezier(.2,.7,.3,1); }
+  @keyframes fadeSlideIn{
+    from{ opacity:0; transform:translateY(10px); }
+    to{ opacity:1; transform:translateY(0); }
+  }
+  .fade-refresh{ animation:fadeSlideIn .3s cubic-bezier(.2,.7,.3,1); }
+  header{ animation:headerIn .5s ease backwards; }
+  @keyframes headerIn{ from{ opacity:0; transform:translateY(-12px); } to{ opacity:1; transform:translateY(0); } }
+  nav.tabs button{ transition:color .2s ease, background .2s ease, border-color .2s ease; }
+  .card, .assessment-card, .preview-assessment{ transition:box-shadow .2s ease, transform .2s ease; }
+  .assessment-card:hover, .preview-assessment:hover{ box-shadow:0 10px 24px -14px rgba(43,33,26,0.35); }
 
   .toolbar{
     display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between;
@@ -202,12 +212,18 @@
   .chip.mastered{ background:var(--success-bg); color:var(--success); }
   .chip.notyet{ background:var(--danger-bg); color:var(--danger); }
   .chip.done{ background:var(--success-bg); color:var(--success); margin-left:8px; text-transform:none; letter-spacing:0; vertical-align:middle; }
+  .chip.draft{ background:#FBF1DA; color:#8A6A11; margin-left:8px; text-transform:none; letter-spacing:0; vertical-align:middle; font-weight:700; }
+  .assessment-card.is-draft{ border-color:#E8D7A0; background:repeating-linear-gradient(135deg, #fff, #fff 12px, #FFFBF0 12px, #FFFBF0 24px); }
+  .warn-btn{ background:var(--gold); color:var(--crimson); font-weight:700; }
+  .warn-btn:hover{ background:var(--gold-light); }
   .schedule-tabs{ display:flex; gap:6px; margin-bottom:16px; }
   .schedule-tab{
     border:1.5px solid var(--parchment-deep); background:#fff; color:var(--ink-soft);
     font-family:'Inter',sans-serif; font-weight:600; font-size:12.5px;
     padding:7px 16px; border-radius:999px; cursor:pointer;
+    transition:background .22s ease, color .22s ease, border-color .22s ease, transform .12s ease;
   }
+  .schedule-tab:active{ transform:scale(0.96); }
   .schedule-tab.active{ background:var(--crimson); border-color:var(--crimson); color:#fff; }
   .chip.pending{ background:var(--parchment-deep); color:var(--ink-soft); }
   .song-chip{ font-size:12px; background:#fff; border:1px solid var(--parchment-deep); padding:4px 10px; border-radius:999px; margin:3px 4px 0 0; display:inline-block; }
@@ -296,7 +312,7 @@
     .mini-song-row{ flex-wrap:wrap; gap:6px; }
     .status-select{ min-width:140px; }
   }
-  @media (prefers-reduced-motion: reduce){ *{transition:none !important;} }
+  @media (prefers-reduced-motion: reduce){ *{transition:none !important; animation:none !important;} }
 </style>
 </head>
 <body>
@@ -924,11 +940,16 @@ document.getElementById("save-assessment-btn").addEventListener("click", async (
   if (!title || !date){ toast("Give the assessment a title and a date."); return; }
   const payload = { title, date, notes, songIds: Array.from(selectedSongIds) };
   if (editId){
+    // Editing never touches publish status — that's only changed via the
+    // dedicated Publish/Unpublish button, with its own warning.
     await updateDoc(doc(db, "assessments", editId), payload);
     toast("Assessment updated.");
   } else {
-    await setDoc(doc(db, "assessments", crypto.randomUUID()), { ...payload, createdAt: serverTimestamp() });
-    toast("Assessment added.");
+    // New assessments start as drafts — hidden from trainees until staff
+    // explicitly publishes them, so a schedule can be built out in
+    // advance without trainees seeing it half-finished.
+    await setDoc(doc(db, "assessments", crypto.randomUUID()), { ...payload, published: false, createdAt: serverTimestamp() });
+    toast("Assessment added as a draft — not visible to trainees yet.");
   }
   resetAssessmentForm();
 });
@@ -949,12 +970,19 @@ function renderAssessments(){
     const marked = progressAll.filter(p => p.assessmentId === a.id);
     marked.forEach(p => { if (p.status === "mastered") counts.mastered++; else if (p.status === "not_mastered") counts.not_mastered++; });
     const isDone = !!a.completed;
+    // Missing field = treated as published, so assessments created before
+    // this feature existed keep showing to trainees exactly as before —
+    // only new ones default to draft.
+    const isPublished = a.published !== false;
 
     return `
-      <div class="assessment-card">
+      <div class="assessment-card ${isPublished ? "" : "is-draft"}">
         <div class="assessment-card__head">
           <div class="title-block">
-            <h3>${escapeHtml(a.title)} ${isDone ? `<span class="chip done">✓ Completed</span>` : ""}</h3>
+            <h3>${escapeHtml(a.title)}
+              ${isPublished ? "" : `<span class="chip draft">✎ Draft — hidden from trainees</span>`}
+              ${isDone ? `<span class="chip done">✓ Completed</span>` : ""}
+            </h3>
           </div>
           <div class="date">${fmtDate(a.date)}</div>
         </div>
@@ -968,14 +996,28 @@ function renderAssessments(){
             <span class="chip mastered">${counts.mastered} mastered marks</span>
             <span class="chip notyet">${counts.not_mastered} not-yet marks</span>
           </div>
-          <div class="row-actions" style="margin-top:12px;">
-            <button class="icon-btn ${isDone ? "" : "done-toggle-btn"} toggle-completed-btn" data-id="${a.id}" data-completed="${isDone}">${isDone ? "Mark Not Completed" : "Mark Completed"}</button>
+          <div class="row-actions" style="margin-top:12px; flex-wrap:wrap;">
+            <button class="icon-btn ${isPublished ? "" : "warn-btn"} toggle-published-btn" data-id="${a.id}" data-published="${isPublished}">${isPublished ? "Unpublish (hide from trainees)" : "⚠️ Publish to Trainees"}</button>
+            <button class="icon-btn toggle-completed-btn" data-id="${a.id}" data-completed="${isDone}">${isDone ? "Mark Not Completed" : "Mark Completed"}</button>
             <button class="icon-btn edit-assessment" data-id="${a.id}">Edit</button>
             <button class="icon-btn danger del-assessment" data-id="${a.id}">Delete</button>
           </div>
         </div>
       </div>`;
   }).join("");
+
+  el.querySelectorAll(".toggle-published-btn").forEach(b => b.addEventListener("click", async () => {
+    const currentlyPublished = b.dataset.published === "true";
+    if (currentlyPublished){
+      if (!confirm("Hide this assessment from trainees again? They'll no longer see it on their dashboard until it's republished.")) return;
+      await updateDoc(doc(db, "assessments", b.dataset.id), { published: false });
+      toast("Hidden from trainees.");
+    } else {
+      if (!confirm("⚠️ WARNING\n\nThis will make this assessment visible to every trainee immediately, including its schedule, songs, and notes.\n\nAre you sure you want to publish it now?")) return;
+      await updateDoc(doc(db, "assessments", b.dataset.id), { published: true });
+      toast("Published — trainees can now see this assessment.");
+    }
+  }));
 
   el.querySelectorAll(".toggle-completed-btn").forEach(b => b.addEventListener("click", async () => {
     const currentlyCompleted = b.dataset.completed === "true";
@@ -1010,7 +1052,7 @@ document.getElementById("seed-schedule-btn").addEventListener("click", async () 
     const ref = doc(db, "assessments", "seed-" + slugify(a.title));
     const existing = await getDoc(ref);
     if (existing.exists()) continue;
-    await setDoc(ref, { title: a.title, date: a.date, notes: "", songIds: a.songIds, createdAt: serverTimestamp() });
+    await setDoc(ref, { title: a.title, date: a.date, notes: "", songIds: a.songIds, published: true, createdAt: serverTimestamp() });
     added++;
   }
   toast(`Loaded ${added} new assessment(s).`);
@@ -1227,6 +1269,12 @@ document.querySelectorAll(".schedule-tab").forEach(btn => {
     document.querySelectorAll(".schedule-tab").forEach(b => b.classList.remove("active"));
     btn.classList.add("active");
     renderPreview();
+    // Replay the fade so the swap reads as a transition, not a jump.
+    // Only on user-initiated tab clicks — not on background data updates.
+    const content = document.getElementById("preview-content");
+    content.classList.remove("fade-refresh");
+    void content.offsetWidth; // force reflow so the animation restarts
+    content.classList.add("fade-refresh");
   });
 });
 
@@ -1285,7 +1333,11 @@ function renderPreview(){
     el.innerHTML = `<div class="empty">Pick a trainee above to see their dashboard exactly as they see it.</div>`;
     return;
   }
-  const filtered = assessments.filter(a => !!a.completed === (previewFilter === "completed"));
+  // Mirrors trainee.html exactly, draft assessments included: unpublished
+  // assessments never reach a trainee, so they're excluded here too.
+  const filtered = assessments
+    .filter(a => a.published !== false)
+    .filter(a => !!a.completed === (previewFilter === "completed"));
   if (!filtered.length){
     el.innerHTML = `<div class="empty">${previewFilter === "completed" ? "No assessments have been completed yet." : "No upcoming assessments scheduled — this trainee's dashboard is currently empty here."}</div>`;
     return;
